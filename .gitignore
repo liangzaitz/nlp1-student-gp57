@@ -1,0 +1,5 @@
+# ignore my local environment files, unlock them if needed for project team members
+.venv/
+.python-version
+pyproject.toml
+uv.lock
