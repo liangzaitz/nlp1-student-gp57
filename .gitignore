@@ -3,3 +3,22 @@
 .python-version
 pyproject.toml
 uv.lock
+
+=======
+
+# VS Code settings
+.vscode/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Environment variables
+.env
+
+# Project 1 generated data and experiment artifacts
+part1/data/
+part1/results/
