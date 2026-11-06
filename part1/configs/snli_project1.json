@@ -1,0 +1,80 @@
+{
+  "experiment_name": "snli_project1",
+  "status": "provisional_before_pilot",
+  "dataset": {
+    "repo_id": "stanfordnlp/snli",
+    "revision": "cdb5c3d5eed6ead6e5a341c8e56e669bb666725b"
+  },
+  "paths": {
+    "output_dir": "part1/results/project1",
+    "data_dir": "part1/data"
+  },
+  "device": "cpu",
+  "seeds": {
+    "model": 0,
+    "sampling": 0,
+    "cv_splits": [0, 3, 5]
+  },
+  "cross_validation": {
+    "num_folds": 5,
+    "group_by": "premise",
+    "splitter": "StratifiedGroupKFold",
+    "shuffle": true,
+    "pool": "all_eligible_training_rows"
+  },
+  "tokenizer": {
+    "algorithm": "BPE",
+    "pretokenizer": "Metaspace",
+    "vocab_size": 5000,
+    "min_frequency": 2,
+    "unk_token": "[UNK]",
+    "normalization": "none"
+  },
+  "representations": ["indicators", "unigram_counts", "unigram_bigram_counts"],
+  "bigram_features": {
+    "min_frequency": 2,
+    "max_features": 5000
+  },
+  "classifiers": ["logistic", "mlp_one_hidden", "mlp_two_hidden"],
+  "logistic_training": {
+    "solver": "saga",
+    "C": 1.0,
+    "max_iter": 300,
+    "tol": 0.0001
+  },
+  "diagnostics": {
+    "hypothesis_only": {
+      "classifier": "logistic",
+      "representation": "unigram_counts",
+      "input_mode": "hypothesis_only",
+      "preprocessing": "same_fold_shared_pair_tokenizer_and_inventory"
+    }
+  },
+  "neural_training": {
+    "hidden_dims": {
+      "mlp_one_hidden": [128],
+      "mlp_two_hidden": [128, 64]
+    },
+    "dropout": 0.1,
+    "optimizer": "AdamW",
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "batch_size": 128,
+    "num_epochs": null
+  },
+  "evaluation": {
+    "primary_metric": "accuracy",
+    "supporting_metrics": ["nll", "macro_f1"],
+    "rope_half_width": 0.005,
+    "rope_motivation": "Differences within half a percentage point of accuracy are too small here to prefer a more complex or costly system on accuracy alone; this is a project judgement, not an application-derived tolerance.",
+    "pool_policy": "test_priority_exclude_train_overlap_with_both_holdouts_v1",
+    "class_order": [0, 1, 2],
+    "decision_rule": "argmax_probability",
+    "tie_break": "smallest_label_id",
+    "nll_log_base": "natural",
+    "nll_probability_clip": "float64_machine_epsilon",
+    "class_metric_zero_division": 0,
+    "confusion_matrix_axes": "rows_gold_columns_predicted",
+    "tuning_policy": "pilot_validation_then_fixed_epochs_and_hyperparameters"
+  }
+}

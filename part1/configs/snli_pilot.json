@@ -1,0 +1,13 @@
+{
+  "training_target_rows": 6000,
+  "validation_target_rows": 1200,
+  "sampling_seed": 0,
+  "epoch_candidates": [3, 5, 8, 12],
+  "neural_threads": 1,
+  "logistic_max_iter_candidates": [300, 1000, 2000],
+  "comparison_row_candidates": [15000, 30000, 60000],
+  "include_full_pool_candidate": true,
+  "primary_matrix_budget_seconds": 7200,
+  "runtime_projection_safety_factor": 2.0,
+  "epoch_selection_rule": "earliest candidate within the accuracy ROPE half-width of the best mean pilot-validation accuracy across all six neural systems"
+}
