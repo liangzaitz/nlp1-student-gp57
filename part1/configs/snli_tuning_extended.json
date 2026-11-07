@@ -1,0 +1,96 @@
+{
+  "version": "joint_search_v1",
+  "output_dir": "part1/results/project1/tuning",
+  "search_seed": 57,
+  "sampling_seed": 57,
+  "model_seeds": [
+    0,
+    3,
+    5
+  ],
+  "screening_target_rows": 100000,
+  "full_training_finalists_per_system": 2,
+  "initial_max_epochs": 30,
+  "absolute_max_epochs": 60,
+  "patience": 3,
+  "logistic_max_iter": 4000,
+  "ranking": "validation accuracy descending, NLL ascending, candidate id ascending",
+  "refinement": "each screening winner: C x0.1/x10 or neural LR /3/x3; next vocabulary (2k->1k,20k->30k)",
+  "space": {
+    "vocab_size": [
+      2000,
+      5000,
+      10000,
+      20000
+    ],
+    "merge_min_frequency": [
+      2,
+      5,
+      10
+    ],
+    "normalization": [
+      "none",
+      "lowercase"
+    ],
+    "bigram_cap": [
+      5000,
+      10000,
+      20000
+    ],
+    "bigram_min_frequency": [
+      2,
+      5,
+      10
+    ],
+    "C": [
+      0.001,
+      0.01,
+      0.1,
+      1.0,
+      10.0
+    ],
+    "learning_rate": [
+      0.0001,
+      0.0003,
+      0.001,
+      0.003
+    ],
+    "dropout": [
+      0.0,
+      0.1,
+      0.3,
+      0.5
+    ],
+    "weight_decay": [
+      0.0,
+      1e-05,
+      0.0001,
+      0.001,
+      0.01
+    ],
+    "one_hidden": [
+      64,
+      128,
+      256
+    ],
+    "two_hidden": [
+      [
+        128,
+        64
+      ],
+      [
+        256,
+        64
+      ],
+      [
+        256,
+        128
+      ]
+    ],
+    "batch_size": [
+      128,
+      256,
+      512
+    ]
+  }
+}

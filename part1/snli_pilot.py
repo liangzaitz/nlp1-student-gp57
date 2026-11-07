@@ -37,7 +37,7 @@ from .snli_models import (
 
 
 DEFAULT_PILOT = REPO_ROOT / "part1/configs/snli_pilot.json"
-FROZEN_CONFIG = REPO_ROOT / "part1/configs/snli_project1_frozen.json"
+FROZEN_CONFIG = REPO_ROOT / "part1/configs/snli_project1_frozen_bigram.json"
 
 
 def _read(path: Path):
@@ -489,7 +489,10 @@ def load_pilot_report(config_path: str | Path = DEFAULT_CONFIG) -> dict[str, Any
     marker = Path(record["pilot_manifest"])
     if _sha256(marker) != record["sha256"]:
         raise ValueError("Pilot manifest changed.")
-    return _load_report(marker)
+    report = _load_report(marker)
+    if report["manifest"]["specification"]["base_configuration"]["representations"] != config["representations"]:
+        raise ValueError("Saved pilot representations differ from the current configuration; run python -m part1.snli_pilot.")
+    return report
 
 
 if __name__ == "__main__":

@@ -30,7 +30,7 @@
     "unk_token": "[UNK]",
     "normalization": "none"
   },
-  "representations": ["indicators", "unigram_counts", "unigram_bigram_counts"],
+  "representations": ["indicators", "unigram_counts", "bigram_counts"],
   "bigram_features": {
     "min_frequency": 2,
     "max_features": 5000

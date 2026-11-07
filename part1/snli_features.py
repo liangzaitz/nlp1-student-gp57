@@ -31,8 +31,8 @@ from .project_setup import DEFAULT_CONFIG, prepare_workspace
 from .snli_evaluation import ROW_COLUMNS, prepare_evaluation_protocol
 
 
-FEATURE_VERSION = "v1"
-REPRESENTATIONS = ("indicators", "unigram_counts", "unigram_bigram_counts")
+FEATURE_VERSION = "v2"
+REPRESENTATIONS = ("indicators", "unigram_counts", "bigram_counts")
 
 
 def _sha256(path: Path) -> str:
@@ -143,9 +143,10 @@ def learn_bigrams(
 class PairFeatureEncoder:
     """A fitted tokenizer/inventory; transformation never learns new coordinates.
 
-    Unigram spaces: [P unigrams; H unigrams]. Extended count space:
-    [P unigrams; P bigrams; H unigrams; H bigrams]. All values are raw counts
-    or binary indicators, stored as float32 CSR without dense intermediate rows.
+    Model inputs are [P unigrams; H unigrams] for indicators/unigram counts,
+    or [P bigrams; H bigrams] for bigram-only counts. An internal combined
+    count cache holds both inventories so all three inputs share tokenization.
+    Values are float32 CSR counts or indicators, without dense intermediate rows.
     """
 
     def __init__(
@@ -168,14 +169,18 @@ class PairFeatureEncoder:
     def num_features(self, representation: str) -> int:
         if representation not in REPRESENTATIONS:
             raise ValueError(f"Unknown representation: {representation}")
-        return 2 * (self.vocab_size + (len(self.bigrams) if representation == "unigram_bigram_counts" else 0))
+        return 2 * (len(self.bigrams) if representation == "bigram_counts" else self.vocab_size)
 
     def count_matrix(self, tokens: TokenizedPairs) -> sparse.csr_matrix:
-        """Construct the full unigram+bigram count matrix directly in CSR."""
+        """Build the internal cache [P unigrams; P bigrams; H unigrams; H bigrams].
+
+        Select a model input with representations(); this combined cache is
+        never itself a representation in the current comparison.
+        """
         for ids, _ in tokens.roles():
             if len(ids) and (ids.min() < 0 or ids.max() >= self.vocab_size):
                 raise ValueError("Token IDs are outside this encoder's fitted vocabulary.")
-        width = self.num_features("unigram_bigram_counts") // 2
+        width = self.vocab_size + len(self.bigrams)
         values, indices, indptr = array("f"), array("i"), array("q", [0])
         for row in range(len(tokens)):
             coordinates = {}
@@ -195,7 +200,7 @@ class PairFeatureEncoder:
         ), shape=(len(tokens), 2 * width))
 
     def representations(self, counts: sparse.csr_matrix) -> dict[str, sparse.csr_matrix]:
-        if counts.shape[1] != self.num_features("unigram_bigram_counts"):
+        if counts.shape[1] != 2 * (self.vocab_size + len(self.bigrams)):
             raise ValueError("Count matrix has the wrong feature dimension.")
         width = counts.shape[1] // 2
         unigrams = sparse.hstack((
@@ -203,7 +208,10 @@ class PairFeatureEncoder:
         ), format="csr", dtype=np.float32)
         indicators = unigrams.copy()
         indicators.data.fill(1)
-        return {"indicators": indicators, "unigram_counts": unigrams, "unigram_bigram_counts": counts}
+        bigrams = sparse.hstack((
+            counts[:, self.vocab_size:width], counts[:, width + self.vocab_size:],
+        ), format="csr", dtype=np.float32)
+        return {"indicators": indicators, "unigram_counts": unigrams, "bigram_counts": bigrams}
 
     def transform(
         self, premises: Sequence[str], hypotheses: Sequence[str], representation: str,
@@ -217,10 +225,10 @@ class PairFeatureEncoder:
         if not 0 <= coordinate < dimension:
             raise IndexError(coordinate)
         role, local = divmod(coordinate, dimension // 2)
-        if local < self.vocab_size:
-            name = repr(self.tokenizer.id_to_token(local))
+        if representation == "bigram_counts":
+            name = repr(tuple(self.tokenizer.id_to_token(token) for token in self.bigrams[local]))
         else:
-            name = repr(tuple(self.tokenizer.id_to_token(token) for token in self.bigrams[local - self.vocab_size]))
+            name = repr(self.tokenizer.id_to_token(local))
         return f"{'P' if role == 0 else 'H'}: {name}"
 
     def save(self, directory: str | Path) -> None:
@@ -231,7 +239,12 @@ class PairFeatureEncoder:
             "feature_version": FEATURE_VERSION, "unk_token": self.unk_token,
             "bigrams": self.bigrams, "bigram_counts": self.bigram_counts,
             "bigram_tie_break": "frequency_descending_then_token_id_pair_ascending",
-            "role_layout": "P_unigrams,P_bigrams,H_unigrams,H_bigrams",
+            "count_cache_layout": "P_unigrams,P_bigrams,H_unigrams,H_bigrams",
+            "representation_layouts": {
+                "indicators": "P_unigrams,H_unigrams",
+                "unigram_counts": "P_unigrams,H_unigrams",
+                "bigram_counts": "P_bigrams,H_bigrams",
+            },
         }, indent=2) + "\n", encoding="utf-8")
 
     @classmethod
@@ -292,8 +305,8 @@ def prepare_fold_features(
 ) -> dict[str, Any]:
     """Fit/cache one outer fold, or verify/reuse its existing fitted artifacts.
 
-    Canonical extended counts are cached once; unigram counts and indicators
-    derive from those same coordinates/tokenizations for all model families.
+    Combined unigram/bigram counts are cached internally once; indicators,
+    unigram-only counts and bigram-only counts are selected for model inputs.
     Official validation/test sentences are never tokenized here.
     """
     started = perf_counter()
@@ -381,7 +394,7 @@ def prepare_fold_features(
 
     for name in partitions:
         if len(tokenized[name]) != len(partitions[name]) or counts[name].shape != (
-            len(partitions[name]), encoder.num_features("unigram_bigram_counts"),
+            len(partitions[name]), 2 * (encoder.vocab_size + len(encoder.bigrams)),
         ) or counts[name].dtype != np.float32:
             raise ValueError(f"{name}: tokenization/counts do not align with this fold.")
     matrices = {name: encoder.representations(matrix) for name, matrix in counts.items()}

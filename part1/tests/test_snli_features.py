@@ -47,11 +47,10 @@ class SparseFeatureTests(unittest.TestCase):
             matrices["indicators"].toarray(),
             [[0, 1, 1, 0, 0, 1, 1, 0], [0, 0, 0, 1, 0, 0, 1, 0]],
         )
-        # V=4, B=3: P unigrams/bigrams then H unigrams/bigrams.
+        # B=3: only P bigrams followed by H bigrams; single-token roles are zero.
         np.testing.assert_array_equal(
-            matrices["unigram_bigram_counts"].toarray(),
-            [[0, 2, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1],
-             [0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0]],
+            matrices["bigram_counts"].toarray(),
+            [[1, 1, 0, 0, 0, 1], [0, 0, 0, 0, 0, 0]],
         )
         for name, matrix in matrices.items():
             self.assertTrue(sparse.isspmatrix_csr(matrix))
@@ -67,8 +66,23 @@ class SparseFeatureTests(unittest.TestCase):
         self.assertNotIn((2, 3), self.encoder.bigrams)  # Across premise rows.
         self.assertEqual(learn_bigrams(self.tokens, min_frequency=2, max_features=5), ([], []))
         zero = PairFeatureEncoder(self.tokenizer, [], [])
-        matrix = zero.transform(self.premises, self.hypotheses, "unigram_bigram_counts")
-        self.assertEqual(matrix.shape, (2, 8))
+        matrix = zero.transform(self.premises, self.hypotheses, "bigram_counts")
+        self.assertEqual(matrix.shape, (2, 0))
+
+    def test_bigram_only_counts_names_roles_and_omitted_pairs(self):
+        # Retain repeated-pair counts, but never fall back to unigram values.
+        original = self.encoder.transform(["red red red blue"], ["blue red"], "bigram_counts")
+        np.testing.assert_array_equal(original.toarray(), [[2, 1, 0, 0, 0, 1]])
+        self.assertEqual(self.encoder.feature_name(0, "bigram_counts"), "P: ('red', 'red')")
+        self.assertEqual(self.encoder.feature_name(5, "bigram_counts"), "H: ('blue', 'red')")
+        swapped = self.encoder.transform(["blue red"], ["red red red blue"], "bigram_counts")
+        np.testing.assert_array_equal(original[:, :3].toarray(), swapped[:, 3:].toarray())
+        np.testing.assert_array_equal(original[:, 3:].toarray(), swapped[:, :3].toarray())
+        empty = self.encoder.transform(["red", "blue", "red green", ""], [""] * 4, "bigram_counts")
+        self.assertEqual(empty.shape, (4, 6))
+        self.assertEqual(empty.nnz, 0)  # Known unigrams and an omitted pair contribute nothing.
+        with self.assertRaisesRegex(ValueError, "Unknown representation"):
+            self.encoder.transform(["red"], ["blue"], "unigram_bigram_counts")
 
     def test_order_collision_and_sentence_role_swap(self):
         tokens = tokenize_pairs(self.tokenizer, ["red blue green", "blue red green"], ["green", "green"])
@@ -76,7 +90,7 @@ class SparseFeatureTests(unittest.TestCase):
         encoder = PairFeatureEncoder(self.tokenizer, pairs, counts)
         matrices = encoder.representations(encoder.count_matrix(tokens))
         self.assertEqual((matrices["unigram_counts"][0] != matrices["unigram_counts"][1]).nnz, 0)
-        self.assertGreater((matrices["unigram_bigram_counts"][0] != matrices["unigram_bigram_counts"][1]).nnz, 0)
+        self.assertGreater((matrices["bigram_counts"][0] != matrices["bigram_counts"][1]).nnz, 0)
         original = encoder.transform(["red red"], ["blue"], "unigram_counts")
         swapped = encoder.transform(["blue"], ["red red"], "unigram_counts")
         np.testing.assert_array_equal(original[:, :4].toarray(), swapped[:, 4:].toarray())
@@ -184,8 +198,9 @@ class FoldFeatureCacheTests(unittest.TestCase):
                 source = dataset["train"].select(rows["clean_index"].tolist())
                 np.testing.assert_array_equal(source["example_id"], rows["example_id"])
                 tokens = tokenize_pairs(second["encoder"].tokenizer, source["premise"], source["hypothesis"])
-                self.assertEqual((second["encoder"].count_matrix(tokens) != second["matrices"][partition]["unigram_bigram_counts"]).nnz, 0)
+                reconstructed = second["encoder"].representations(second["encoder"].count_matrix(tokens))
                 for representation in REPRESENTATIONS:
+                    self.assertEqual((reconstructed[representation] != second["matrices"][partition][representation]).nnz, 0)
                     self.assertEqual((first["matrices"][partition][representation] != second["matrices"][partition][representation]).nnz, 0)
             alternate = prepare_fold_features(config_path, seed=3, fold=1)
             self.assertNotEqual(first["feature_dir"], alternate["feature_dir"])

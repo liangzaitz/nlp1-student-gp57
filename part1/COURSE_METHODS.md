@@ -33,9 +33,10 @@ study material, not a request to carry out their administrative action items.
 
 1. Keep SNLI as three-way classification with input `x = (P, H)`.
 2. Keep the T1 BPE tokenizer as the common segmentation procedure.
-3. Compare binary unigram indicators, raw unigram counts, and unigram-plus-bigram
+3. Compare binary unigram indicators, raw unigram counts, and bigram-only
    counts. The third choice follows CLASS pages 24 and 49-50 and T1's
-   bag-of-bigrams discussion. It replaces the earlier plan's TF-IDF choice.
+   bag-of-bigrams discussion. On 2026-11-06 the group requested pure bigram
+   counts in place of the earlier combined unigram/bigram representation.
 4. Compare log-linear softmax regression, the T1 one-hidden-layer ReLU MLP, and a
    two-hidden-layer ReLU MLP. Changing depth is our small architecture extension,
    supported by CLASS pages 31-35 and allowed by P1.
@@ -57,7 +58,7 @@ identifies what must demonstrate completion; it does not assert existing results
 | Fixed feature map `h(x)` in `R^D` | CLASS 18-24; T1 Text Representation | Define feature coordinates, role blocks, dimension, and information loss |
 | Binary token indicators | CLASS 20-21; T1 TokenIndicator; P1 | First representation; manually check presence values |
 | Unigram counts / bag-of-words | CLASS 22-23; T1 Bag-of-Words exercise; P1 | Second representation; manually check repeated-token counts |
-| Ordered multi-token / n-gram features | CLASS 24, 49-50; T1 Named Axes questions | Third representation: unigrams plus adjacent BPE-token bigrams |
+| Ordered multi-token / n-gram features | CLASS 24, 49-50; T1 Named Axes questions | Third representation: counts of retained adjacent BPE-token bigrams only |
 | Text normalization and information loss | CLASS 24 | Document casing/punctuation choices and preserve negation; inspect examples |
 | Log-linear logits and softmax | CLASS 26-29; T1 loglin.py; P1 | Fit multiclass logistic regression; explain weights, biases, normalized probabilities |
 | ReLU feed-forward network | CLASS 31-34; T1 smlp.py; P1 | Fit the one-hidden-layer MLP with fixed sparse inputs |
@@ -83,8 +84,8 @@ The input is a premise/hypothesis pair `x = (P, H)`, and `K = 3`.
 - Encode the sentences separately and concatenate two fixed-size role blocks:
   `h(x) = [v(P); v(H)]`. This is our SNLI adaptation of the fixed feature map.
 - Indicators and unigram counts have pair dimension `D = 2V`.
-- With `B` retained bigram types, unigram-plus-bigram counts have dimension
-  `D = 2(V + B)`. Learn the bigram inventory only from training data. Count
+- With `B` retained bigram types, bigram-only counts have dimension
+  `D = 2B` and layout `[P bigrams; H bigrams]`. Learn the inventory only from training data. Count
   adjacent BPE tokens within each sentence, without crossing the role boundary.
 - BPE tokens are subword units. A bigram of these units need not be two complete
   linguistic words; keep this distinction explicit in examples and conclusions.
@@ -102,9 +103,12 @@ The input is a premise/hypothesis pair `x = (P, H)`, and `K = 3`.
 - Accuracy measures the fraction of correct decisions. NLL evaluates the
   probabilities assigned to gold labels. Macro-F1 gives each class equal weight.
 
-The additional bigram coordinates change feature inventory and model capacity,
-as well as exposing some order. Record this in comparisons; do not attribute
-every gain solely to ordering or imply that bigrams encode a full parse tree.
+Replacing unigrams with bigrams changes feature identities, sparsity and local
+order sensitivity. With `V=B=5000`, all three inputs have 10,000 coordinates
+and matched parameter counts at each architecture. Equal width does not make
+their information equivalent: one-token sentences and sentences with no retained
+adjacencies produce zero bigram blocks. Individual token counts are omitted;
+there is no unigram fallback. Bigrams still do not encode a full parse tree.
 
 ## Linguistic concepts to use in interpretation
 
@@ -185,30 +189,39 @@ premise is our task-specific adaptation.
 
 ## Implementation and understanding tracker
 
-All four lecture decks have been reviewed. Steps 1–6 are complete: workspace,
-SNLI inspection, evaluation protocol, features, classifiers, and the measured
-SNLI pilot. Feature checks cover one full reference fold and fresh pilot-only
-preprocessing. Reported CV comparisons remain pending. Mark a row
-implemented/verified only when there is code/output to link and an explanation
-the group can give. Update both this table and `PROJECT1_PLAN.md` at each step.
+All four supplied lecture decks have been reviewed. Baseline Steps 1–8 and the
+short validation search, Step 9 error review/final design and Step 10 final fit/test
+are complete. New tuned CV remains optional; group review/oral preparation are next.
+The main notebook was simplified on 2026-11-06 while retaining these methods.
+The historical pilot, extensive search and detailed resume machinery are in
+[practical_1_details.ipynb](practical_1_details.ipynb); the main notebook never loads it.
 
-| Component | Current status | Evidence to add |
-| --- | --- | --- |
-| Environment, configuration, seeds, and provenance | Implemented/verified: Step 1 | [Executed notebook setup](practical_1.ipynb), [shared helper](project_setup.py), [configuration](configs/snli_project1.json), [setup instructions](README.md), [version snapshot](environment.txt) |
-| Dataset, labels, linguistic examples | Implemented/verified: Step 2 | [Notebook section 2](practical_1.ipynb), [data helper](snli_data.py), [measured findings](PROJECT1_FINDINGS.md), [offline checks](tests/test_snli_data.py) |
-| Model -> pmf -> decision explanation | Implemented/verified: Steps 5–6 | Notebook sections 2.1, 5 and 6; synthetic checks and saved SNLI pilot probabilities/decisions |
-| BPE and segmentation explanation | Implemented/verified: Step 4 on one full fold; other folds fit lazily | [Feature helper](snli_features.py), saved tokenizer/configuration, actual training-token examples in notebook section 4 |
-| Indicators and unigram counts | Implemented/verified: Step 4 | Sparse role blocks, hand-checked repeated-token counts, [offline tests](tests/test_snli_features.py), notebook section 4 |
-| Unigram-plus-bigram representation | Implemented/verified: Step 4 | Training-only capped inventory, actual dimensions, order-collision diagnostics, boundary and reload checks |
-| Log-linear, one-layer, two-layer models | Implemented/verified: Steps 5–6; CV pending | [Matrix-based models](snli_models.py), parameter counts, synthetic and all-nine-system SNLI pilot bundle checks |
-| MLE/NLL, gradients, regularization | Implemented/verified: Steps 5–6 | Sparse minibatch/autodiff loop, AdamW, NLLLoss equivalence, [numerical tests](tests/test_snli_models.py), notebook section 6's measured learning curves and overfitting discussion |
-| NLL versus accuracy/F1 | Pilot scores verified: Step 6; reported CV pending Step 7 | Saved pilot probabilities, class reports/confusions, NLL agreement; validation NLL rises with longer neural training while accuracy fluctuates |
-| Pilot budget and training schedule | Completed/frozen: Step 6 | [Pilot runner](snli_pilot.py), [policy](configs/snli_pilot.json), [frozen recipe](configs/snli_project1_frozen.json), [checks](tests/test_snli_pilot.py); 3 epochs, SAGA ceiling 1,000, 60,005 comparison rows |
-| Repeated grouped CV | Full reference folds: Step 3; budgeted comparison folds verified: Step 6; model scores pending Step 7 | [Evaluation helper](snli_evaluation.py), separate saved protocol IDs, seeded complete-group sampling, leakage/coverage/reuse checks, notebook sections 3 and 6 |
-| Bayesian/ROPE comparison | ROPE motivated/frozen: Step 3; posterior computation pending Step 8 | Half-width 0.005 accuracy in configuration/notebook; no posterior results yet |
-| Representation and label limitations | Planned: Step 9 | Error categories and worked examples |
-| HC2b concepts | Reviewed; discussion only for P1 | Short connections in study/oral notes as needed |
-| Oral deliverables and reproducibility | Planned: Step 11 | Compact backup deck, repository URL, commands, sources/assistance log |
+| Component | Current status and evidence |
+| --- | --- |
+| Environment, seeds, data provenance | Notebook sections 1–3; pinned SNLI revision, saved source IDs, [environment](environment.txt), [setup](README.md) |
+| Task, labels and data examples | Section 2; counts, labelled pairs, training-only label/length plots; [data tests](tests/test_snli_data.py) |
+| BPE and train-only preprocessing | Section 4; separate vocabulary/inventory per fold, actual BPE examples, saved mappings |
+| Indicators, unigram and pure bigram counts | Section 4; explicit sparse role blocks, repeated-token values, controlled order permutation; [feature tests](tests/test_practical_1_notebook.py) |
+| Model → pmf → decision | Section 5; visible logits/softmax/argmax calculation on an illustrative unlabelled pair |
+| Log-linear and one/two-hidden-layer MLPs | Section 5; literal classes/training function, sparse first multiplication, ReLU/dropout and raw-text bundle reload |
+| MLE/NLL, gradients, regularization | Section 5; explicit minibatch/autodiff/AdamW loop and 30-update teaching curve; section 6 shows validation NLL overfitting |
+| NLL versus accuracy/F1 | Sections 5–7; independent probability-based metric recomputation; accuracy-selected checkpoints need not minimize NLL |
+| Historical fixed-epoch baseline | Frozen [configuration](configs/snli_project1_frozen_bigram.json); three epochs before reported CV; outer scores never select checkpoints |
+| Repeated grouped CV | Sections 3/7; 60,005 rows, five folds × three split seeds, 165 fits; complete-group boundaries and paired row IDs checked |
+| Bayesian comparison and ROPE | Section 8; direct corrected-t computation, 28 contrasts, 95% intervals, 84 sensitivity rows, preselected ±0.005 accuracy ROPE |
+| Joint tokenizer/model tuning | Section 6; 27 completed observations, nine reused/18 new, 7m 58s; 100,001 train/9,839 validation, one seed, three joint recipes; [policy](configs/snli_tuning.json) |
+| Code in notebook cells | 42 code cells / 1,297 code lines; fresh-kernel Run All with project imports blocked; no dynamic helper-file execution; [literal-definition tests](tests/test_practical_1_notebook.py) |
+| Practical-style presentation | Short explanations, worked token/feature/model inputs, explicit gradient updates, comparative plots and qualified interpretations |
+| Error analysis and final design | Completed first pass: section 9, 60,005 unique OOF rows, class confusions, overlap/negation slices, shared errors and 50 distinct annotated cases; 11 text/label flags retained, student review still required; [frozen final recipe](configs/snli_final.json), five epochs chosen on validation |
+| Final test | Completed Step 10: 559,164 refit rows, five epochs, 2.98 minutes; 9,824 test pairs, accuracy 74.58%; one frozen-model prediction pass, saved probabilities/bundle, four graph sets |
+| Oral preparation | Pending Step 11; group review and optional backup slides still required |
+| HC2b concepts | Reviewed; connections only, no sequence model added to P1 |
+
+Verification: 69 repository tests passed; main Run All independently reproduced
+all saved CV/validation metrics and Bayesian/ROPE tables. The new fixed-training
+loop matches the earlier implementation on synthetic cases. These are software
+checks, not evidence that students have reviewed or can explain every method.
+See [current findings](PROJECT1_FINDINGS.md) for exact scores, scope and limitations.
 
 ## Course organization to keep in mind
 

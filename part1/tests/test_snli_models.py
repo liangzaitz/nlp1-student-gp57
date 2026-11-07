@@ -199,7 +199,7 @@ class PredictionBundleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary) / "bundle"
             with self.assertRaisesRegex(ValueError, "dimensions"):
-                save_prediction_bundle(directory, classifier, self.encoder, "unigram_bigram_counts")
+                save_prediction_bundle(directory, classifier, self.encoder, "bigram_counts")
             save_prediction_bundle(directory, classifier, self.encoder, "unigram_counts")
             with self.assertRaises(FileExistsError):
                 save_prediction_bundle(directory, classifier, self.encoder, "unigram_counts")

@@ -1,217 +1,113 @@
 # Project 1: SNLI
 
-The current implementation covers workspace setup (Step 1), pinned SNLI
-loading/inspection (Step 2), evaluation pools/saved grouped folds (Step 3),
-training-only BPE/sparse sentence-pair features (Step 4), classifiers/baselines
-(Step 5), and the measured SNLI pilot/frozen comparison budget (Step 6).
-Reported CV comparisons are next in the
-[execution plan](PROJECT1_PLAN.md). The [method tracker](COURSE_METHODS.md)
-connects our choices to the supplied lectures and tutorial.
+Start with [practical_1.ipynb](practical_1.ipynb). It follows the supplied
+[course practical](https://github.com/S-Chaudhuri/uva_nlp1_2025/blob/main/NLP1_2025_Practical_2_%28student%29.ipynb):
+short explanations, worked inputs, explicit model/training code, plots and interpretation.
+All custom code used by this notebook is written in its cells. It does not import
+local project modules, execute Python files, or load another notebook's definitions.
+Installed packages, JSON configurations, downloaded data and saved experiments
+remain dependencies; the notebook is not a standalone data/result distribution.
 
-## Run the current implementation
+## Open and run
 
-From the repository root:
+From the repository root, use the existing environment:
 
 ```bash
 source .venv/bin/activate
-python -m part1.project_setup
-python -m part1.snli_data
-python -m part1.snli_evaluation
-python -m part1.snli_features --seed 0 --fold 0
-python -m part1.snli_models
-python -m part1.snli_pilot
-python -m part1.snli_evaluation --config part1/configs/snli_project1_frozen.json
 jupyter lab part1/practical_1.ipynb
 ```
 
-In VS Code, select `.venv/bin/python` as both the interpreter and notebook
-kernel. The notebook works when its working directory is the repository root
-or `part1`; it finds the repository before importing the shared setup helper.
-Use Run All to execute the implemented sections. The first Step 2 run downloads
-SNLI; later runs reuse the local cache. Section 4 fits/reloads preprocessing for
-one full outer fold. Section 5 checks the models using synthetic data only.
-Section 6 loads the saved measured SNLI pilot and verifies its frozen comparison
-folds. Run All does not retrain the pilot. Sections 7–11 remain pending;
-reported CV model comparisons and final test scoring have not run.
+In VS Code select `.venv/bin/python` as the notebook kernel, then **Run All**.
+The notebook finds the repository from either its root or `part1`.
+It reads the completed experiments, verifies their results, and runs 30 teaching
+updates on 16 training examples. **It starts no new training or test-inference pass.** Final test probabilities
+are already saved; Run All checks them and regenerates their graphs. Cached Arrow files contain the downloaded SNLI data;
+offline loading and cache lock files are normal. Widget progress bars are disabled.
 
-Cached data is still the downloaded Hugging Face dataset. A message mentioning
-offline mode means the loader used local files without contacting the Hub;
-it does not mean SNLI is missing. Section 2.2 displays the split sizes and an
-actual training example to confirm loading. Notebook progress bars are disabled
-because their saved widget output may not render when the notebook is reopened.
-The cache's `.lock` files coordinate access; the dataset rows live in Arrow files.
+The current checkout contains the ignored data/results. A new checkout needs the
+data and completed artifact directories to reproduce these displays. The detailed
+notebook and earlier CLI modules preserve the original experiment-generation
+workflow; commands for that workflow are in the locally preserved previous README
+under `results/project1/review/before_streamlining/`. Generating all baseline
+artifacts is separate from the default read-and-check Run All.
 
-The data command and notebook use the same `snli_data.py` implementation. It
-verifies the label mapping, filters invalid labels/unusable text, preserves
-source row IDs and official splits, saves the cleaned DatasetDict, and produces
-an exact duplicate/overlap audit, summary CSV files, and two figures. See
-`PROJECT1_FINDINGS.md` for observed counts and the overlap policy in Step 3.
-
-Step 3 reads the saved cleaned data without a Hub request. CV excludes training
-premises present in either official holdout; pilot validation excludes test
-premises. Final refitting is reserved for original train + validation excluding
-test premises. These are separate selections; the cleaned official splits stay
-unchanged. Only test premises/source IDs are used for these structural checks.
-
-Five `StratifiedGroupKFold` folds for each seed `[0, 3, 5]` are saved under
-`results/project1/folds/<protocol_id>/`. Generating full-SNLI folds takes longer
-than reloading them. Repeated runs verify and reuse the assignments; model
-hyperparameter changes do not regenerate them. A different data pool, split
-configuration, evaluation policy, or splitter version gets a separate ID.
-Step 6 saves a separate 60,005-row comparison protocol after selecting a
-complete-premise-group subset for the computation budget.
-
-Step 4 reuses the tutorial's BPE helper, with target vocabulary size 5,000,
-minimum merge frequency 2, Metaspace `▁`, and no case/punctuation normalization.
-It fits only the requested outer training partition, then learns a capped
-inventory of within-sentence BPE bigrams from that same text. Premise and
-hypothesis occupy separate blocks. Indicators, raw unigram counts, and
-unigram-plus-bigram counts share tokenization/inventory and use float32 CSR.
-
-`python -m part1.snli_features --seed 0 --fold 0` materializes the representative
-full fold verified in notebook section 4 (439,403 train / 109,850 held-out rows).
-Use another saved seed/fold to prepare that fold's own preprocessing. The other
-14 full-reference folds are deferred. This feature command launches no
-classifier training. It does not tokenize official validation/test text.
-Reruns verify/reuse the feature cache; changed feature settings or code receive
-a separate cache ID, while model-only changes retain the features.
-
-For arbitrary sentence pairs, reload `PairFeatureEncoder` from the feature
-directory and call `transform(premises, hypotheses, representation)`. It applies
-the fixed mapping; empty/whitespace-only inference sentences get zero role
-blocks, and unseen characters use `[UNK]`. Non-string inputs are rejected.
-
-Step 5 adapts the supplied SAGA logistic approach to existing CSR matrices,
-reuses the tutorial's sparse first hidden layer, and adds a two-hidden-layer
-MLP. `fit_classifier(kind, X, y, config)` accepts training labels only. Neural
-fits require a positive fixed epoch count; the reference/pilot configuration
-keeps it unset, while Step 6's frozen configuration sets it to 3. Prediction
-disables dropout. Histories record online training loss/accuracy, and logistic
-results record convergence status.
-
-`python -m part1.snli_models` fits/checks all nine feature/model combinations,
-a training-class-prior baseline, and the configured hypothesis-only ablation
-on tiny synthetic text with arbitrary software-check targets. Its two neural
-epochs are a mechanical override, not a SNLI training choice. Each invocation
-writes a new `checkpoints/implementation_smoke/run_*/` directory with checks and
-complete prediction bundles. It reads no SNLI examples and reports no SNLI scores.
-
-Use `save_prediction_bundle(...)` to save weights together with the correct
-tokenizer/inventory, representation, input mode, class mapping, settings, and
-fit information. `load_prediction_bundle(path).predict_proba(premises,
-hypotheses)` reloads the complete text-pair pipeline; `.predict(...)` applies
-the shared argmax rule. Bundle directories are not overwritten; checksums
-detect changed model/preprocessing artifacts. Recreate the recorded environment
-for reloads, especially the sklearn version used by joblib logistic estimators.
-
-`score_probabilities` implements accuracy/NLL/macro-F1 and class/confusion
-reports under the fixed Step 3 conventions. The hypothesis-only diagnostic
-drops premise coordinates while retaining shared training preprocessing; its
-tokenizer is not claimed to have been trained on hypotheses alone.
-
-Step 6's pilot uses 6,001 training pairs and 1,202 official-validation pairs,
-selected by complete premise groups with seed 0. It fits fresh training-only
-preprocessing, trains all nine designs and two baselines, and saves curves,
-timings, memory measurements, class reports, source-ID predictions and complete
-prediction bundles. All 11 bundles reproduce probabilities exactly after reload.
-Pilot validation is used for tuning; these scores are not reported CV estimates.
-
-The predeclared epoch rule selects 3 neural epochs. Initial 300-iteration SAGA
-attempts do not converge; retries converge under a 1,000-iteration ceiling.
-The frozen recipe uses that ceiling and one neural CPU thread. Approximate
-linear planning with a factor-of-two allowance chooses the 60,000-row target
-(60,005 actual rows / 16,590 premise groups), estimating about 58 minutes for
-135 primary fits plus fold preprocessing. Diagnostics, baselines and final
-refitting add work; real runtime can differ. See [findings](PROJECT1_FINDINGS.md).
-
-Use [configs/snli_project1_frozen.json](configs/snli_project1_frozen.json) for
-Step 7, with protocol `3e3b8a39db826f1c`. The original full-reference protocol
-`0dc6821564b1d3f0` and its feature cache are retained. Each new comparison
-training fold must fit its own preprocessing. To prepare a comparison fold:
-
-```bash
-python -m part1.snli_features --config part1/configs/snli_project1_frozen.json --seed 0 --fold 0
-```
-
-The pilot command verifies/reuses completed artifacts on reruns. To inspect
-without training, use `load_pilot_report()` from `part1.snli_pilot`, as notebook
-section 6 does. Checksums detect changed artifacts/frozen configuration. The
-controlled CV runner is the next implementation step.
-
-Run the offline data, leakage, feature-arithmetic, and persistence checks:
-
-```bash
-python -m unittest discover -s part1/tests -v
-```
-
-## Recreate the recorded environment
-
-The course README uses Python 3.14. Our currently verified environment is
-**Python 3.12.3 on Linux x86_64 with CPU PyTorch**. `environment.txt` records its
-installed package versions; it is a platform-specific snapshot, not a guarantee
-of compatibility with Python 3.14 or a GPU installation.
-
-To reproduce this environment on a compatible machine, create a Python 3.12
-virtual environment, activate it, then install the snapshot:
+The verified environment is Python 3.12.3 on Linux with CPU PyTorch; the course
+README specifies Python 3.14. To recreate our recorded environment on a compatible
+machine, create a Python 3.12 virtual environment and install the snapshot:
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
 python -m pip install --extra-index-url https://download.pytorch.org/whl/cpu -r part1/environment.txt
 python -m pip check
 ```
 
-Alternatively, follow the root README/course setup and install
-`requirements.txt`. Record and verify that environment separately instead of
-assuming the supplied snapshot describes it.
+## Reading order and current status
 
-## Configuration and outputs
-
-[configs/snli_project1.json](configs/snli_project1.json) is the reference/pilot
-configuration used by notebook sections 1–5 and the default setup command. It
-records the pinned SNLI revision, seeds, initial feature/model settings, metrics
-and ROPE; its epoch count stays unset. [configs/snli_pilot.json](configs/snli_pilot.json)
-records the pilot sampling, search and runtime policy.
-[configs/snli_project1_frozen.json](configs/snli_project1_frozen.json) records the
-selected training recipe and group budget for reported CV, used in section 6.
-Pass it explicitly with `--config` when preparing comparison folds/features.
-
-Setup and the corresponding pipeline stages create these local, Git-ignored paths:
-
-| Path | Purpose |
+| Notebook section | Content |
 | --- | --- |
-| `part1/data/huggingface/` | Cached source dataset |
-| `part1/data/snli/<revision>/cleaned-v1/` | Cleaned official splits with original row identifiers; load later with `datasets.load_from_disk` |
-| `part1/results/project1/manifests/setup.json` | Latest setup configuration, versions, interpreter, device, and Git state |
-| `part1/results/project1/manifests/data_inspection.json` | Source/cleaned fingerprints, cleaning policy, counts, and artifact paths |
-| `part1/results/project1/manifests/environment.txt` | Package snapshot from the current execution environment |
-| `part1/results/project1/figures/` | Class-balance and training-length figures; later experiment figures |
-| `part1/results/project1/metrics/data_audit/` | Split/class/length summaries, per-row lengths, exclusion IDs/reasons, duplicate groups, overlap counts, and training examples |
-| `part1/results/project1/metrics/` | Later experiment scores alongside the data audit |
-| `part1/results/project1/predictions/` | Later held-out predictions |
-| `part1/results/project1/checkpoints/` | Later model artifacts |
-| `part1/results/project1/checkpoints/implementation_smoke/run_*/` | Synthetic-only model checks and complete prediction bundles, separate from future SNLI models |
-| `part1/results/project1/pilot/<pilot_id>/` | Pilot-only features/rows, candidate and selected model bundles, predictions, curves, metrics, timings, memory and budget projections |
-| `part1/results/project1/manifests/pilot.json` | Pointer to the completed checked development pilot |
-| `part1/results/project1/folds/<protocol_id>/` | Frozen `protocol.json`, `fold_assignments.parquet`, `pool_membership.parquet`, `excluded_rows.csv`, `pool_summary.csv`, and `fold_summary.csv` |
-| `part1/results/project1/manifests/evaluation_design.json` | Pointer to the current frozen evaluation protocol |
-| `part1/results/project1/features/<protocol_id>/seed_<seed>_fold_<fold>/<feature_id>/` | Tokenizer/inventory, ragged token arrays, row order/labels, canonical extended CSR counts, and checked feature manifest |
+| 1–3 | Setup, data, leakage-aware pools and grouped folds |
+| 4 | BPE, indicators, unigram counts and pure bigram counts |
+| 5 | Models, one training loop, gradient example, bundles and logits → probabilities → decision |
+| 6 | Short joint tokenizer/model search and checked validation results |
+| 7–8 | Checked baseline CV scores and Bayesian/ROPE comparisons |
+| 9 | One-repetition OOF error review, 50 annotated cases and frozen final recipe |
+| 10 | Completed final fit/test, learning curves and test graphs |
+| 11 | Group review and oral preparation |
 
-Setup only reads the pinned dataset revision from the configuration; it does
-not contact Hugging Face or download SNLI. We resolved the revision through
-Hugging Face's metadata API when creating the configuration.
+The baseline has **165 completed fits** (135 primary, 30 diagnostic/baseline).
+The short search has **27 completed observations**, nine reused and 18 newly
+fitted, taking **7m 58s** for that invocation. CV and validation use different
+training sizes and evaluation sets; their accuracies are not a direct before/after
+comparison. Step 9 now adds 50 AI-assisted error notes, class confusions, text
+slices and shared-error counts. The final 5k unigram MLP1 recipe is frozen at five
+epochs in [snli_final.json](configs/snli_final.json). The final fit completed in
+2.98 minutes and achieved **74.58% test accuracy**, macro-F1
+**0.7451**, NLL **0.6886** on 9,824 cleaned test rows. See [findings](PROJECT1_FINDINGS.md) and the
+[remaining checklist](PROJECT1_PLAN.md).
 
-`python -m part1.snli_data` performs the download and audit. It only excludes
-invalid labels and unusable text; duplicate pairs and official-split overlaps
-are retained in the saved reference splits. Its held-out-split inspection is
-structural: there are no test predictions or test-driven model comparisons.
-Whitespace-token lengths are exploratory counts, not learned BPE segmentation.
+## Optional new experiments
 
-Rerunning setup refreshes its manifest. Per-experiment run histories will be
-added with the training runner. A manifest with `repository.dirty = true`
-records work in progress; commit the reviewed source and rerun setup when
-recording a reproducible committed version.
+Keep `RUN_SEARCH = False`, `RUN_CV = False` and `RUN_FINAL = False` for the normal report. To run a new
+experiment, save the notebook and enable only its corresponding switch.
+New outputs use `results/project1/streamlined/`, preserving historical artifacts.
 
-Keep human explanations and results in [PROJECT1_FINDINGS.md](PROJECT1_FINDINGS.md)
-and assistance disclosures in [AI_ASSISTANCE.md](AI_ASSISTANCE.md).
+`run_search` tests the three saved joint recipes on the 100,001-row training
+sample and all 9,839 eligible validation rows. It fits training-only preprocessing,
+uses one seed, at most eight neural epochs and patience three, restoring the best
+accuracy checkpoint with NLL as a tie-break. Its simple resume checks its own
+completed trials. It does not import historical trials or run the extended policy.
+An explicit resume gets another allowance; none is scheduled automatically.
+
+Both runners cap each invocation at 900 seconds, including preprocessing. Python
+signal delivery can lag in native library calls. The completed baseline originally
+took 21.62 minutes, so a fresh capped CV invocation may be incomplete. Only complete
+paired scores support the reported comparisons; the simplified CV runner requires
+a new directory rather than resuming partial grids. Historical robust CV resumption,
+trial-import checks, pilot and optional extensive search live in
+[practical_1_details.ipynb](practical_1_details.ipynb), which the main notebook never
+imports. Its outputs are cleared and training switches are false.
+
+The completed final experiment is separate in `results/project1/final/snli_5k_unigram_mlp1/`.
+Its source/configuration snapshot, exact training rows, complete model and test
+probabilities are retained. Even an explicit `RUN_FINAL` invocation reuses a
+completed matching run; changed/corrupt artifacts are rejected. Four PNG graph
+sets live in its `figures/` directory and appear in notebook section 10.
+
+## Verification and supporting records
+
+```bash
+.venv/bin/python -m unittest discover -s part1/tests -v
+```
+
+The streamlined notebook was executed in a fresh kernel with project-helper
+imports blocked. Its checks recompute metrics from all 165 CV prediction sets
+and all 27 validation trials, replay 11 saved systems from raw text, and recompute
+28 Bayesian contrasts plus 84 ROPE-sensitivity rows. Synthetic tests cover feature
+boundaries, both training modes, bundle reloads, search resume, a complete small CV
+and the timer, plus error-analysis alignment/slicing/sampling. Software-test scores are not SNLI experiment results.
+
+- [Project requirements](project.ipynb) and [tutorial](tutorial.ipynb).
+- [Course-method map](COURSE_METHODS.md), including lecture page references.
+- [Configurations](configs/README.md) and [environment snapshot](environment.txt).
+- [AI-assistance record](AI_ASSISTANCE.md); students still need to review and explain the work.

@@ -1,0 +1,98 @@
+{
+  "dataset": {
+    "repo_id": "stanfordnlp/snli",
+    "revision": "cdb5c3d5eed6ead6e5a341c8e56e669bb666725b"
+  },
+  "paths": {
+    "output_dir": "part1/results/project1",
+    "data_dir": "part1/data"
+  },
+  "device": "cpu",
+  "tokenizer": {
+    "algorithm": "BPE",
+    "pretokenizer": "Metaspace",
+    "vocab_size": 5000,
+    "min_frequency": 2,
+    "unk_token": "[UNK]",
+    "normalization": "none"
+  },
+  "bigram_features": {
+    "min_frequency": 2,
+    "max_features": 5000
+  },
+  "neural_training": {
+    "hidden_dims": {
+      "mlp_one_hidden": [
+        128
+      ],
+      "mlp_two_hidden": [
+        128,
+        64
+      ]
+    },
+    "dropout": 0.1,
+    "optimizer": "AdamW",
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "batch_size": 128,
+    "num_epochs": 5,
+    "num_threads": 1
+  },
+  "experiment_name": "snli_project1_final",
+  "status": "frozen_after_step9_before_test",
+  "representation": "unigram_counts",
+  "classifier": "mlp_one_hidden",
+  "input_mode": "pair",
+  "class_order": [
+    0,
+    1,
+    2
+  ],
+  "seeds": {
+    "model": 0
+  },
+  "evaluation": {
+    "primary_metric": "accuracy",
+    "supporting_metrics": [
+      "nll",
+      "macro_f1"
+    ],
+    "rope_half_width": 0.005,
+    "rope_motivation": "Differences within half a percentage point of accuracy are too small here to prefer a more complex or costly system on accuracy alone; this is a project judgement, not an application-derived tolerance.",
+    "pool_policy": "test_priority_exclude_train_overlap_with_both_holdouts_v1",
+    "class_order": [
+      0,
+      1,
+      2
+    ],
+    "decision_rule": "argmax_probability",
+    "tie_break": "smallest_label_id",
+    "nll_log_base": "natural",
+    "nll_probability_clip": "float64_machine_epsilon",
+    "class_metric_zero_division": 0,
+    "confusion_matrix_axes": "rows_gold_columns_predicted",
+    "tuning_policy": "validation_selected_recipe_then_fixed_final_epochs"
+  },
+  "selection": {
+    "cv_run_id": "713ab1f5b3cb5801",
+    "analysis_id": "3b4f7bdb5c7c300b",
+    "tuning_run_id": "4baddae6266ac867",
+    "candidate_id": "29aa244710c5fabe",
+    "validation_rows": 9839,
+    "search_training_rows": 100001,
+    "validation_accuracy": 0.6774062404715926,
+    "validation_nll": 0.8344422312117027,
+    "epoch_rule": "best validation accuracy; NLL breaks exact ties; five epochs frozen before final fit",
+    "rationale": "5k unigram MLP1 balances accuracy, NLL and parameter count; 8k validation gain is only 0.09 pp with worse NLL.",
+    "limitation": "Single-seed subset validation selection; fixed epochs transferred to a larger final pool; no tuned nested CV.",
+    "test_scored": false
+  },
+  "final_training": {
+    "pool": "original_train_plus_validation_exclude_test_premises",
+    "expected_rows": 559164,
+    "max_seconds": 900,
+    "checkpoint_policy": "last_fixed_epoch",
+    "early_stopping": false,
+    "budget_policy": "If all five epochs cannot finish in the allowance, leave final evaluation incomplete; do not score a partial fit."
+  }
+}

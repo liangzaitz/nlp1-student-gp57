@@ -64,7 +64,7 @@ class PilotSelectionTests(unittest.TestCase):
             {"epoch": epoch, "representation": representation, "classifier": kind,
              "validation_accuracy": score, "validation_nll": 1 - score}
             for epoch, score in ((3, .60), (5, .647), (8, .65))
-            for representation in ("indicators", "unigram_counts", "unigram_bigram_counts")
+            for representation in ("indicators", "unigram_counts", "bigram_counts")
             for kind in ("mlp_one_hidden", "mlp_two_hidden")
         ]
         selected, table = select_common_epoch(pd.DataFrame(rows), [3, 5, 8], .005)
@@ -151,6 +151,12 @@ class PilotIntegrationTests(unittest.TestCase):
                 loaded = load_pilot_report(config_path)
             self.assertEqual(cached["manifest_path"], report["manifest_path"])
             pd.testing.assert_frame_equal(loaded["tables"]["metrics"], report["tables"]["metrics"])
+            config["representations"][-1] = "unigram_bigram_counts"
+            config_path.write_text(json.dumps(config))
+            with self.assertRaisesRegex(ValueError, "representations differ"):
+                load_pilot_report(config_path)
+            config["representations"][-1] = "bigram_counts"
+            config_path.write_text(json.dumps(config))
             corrupted = report["pilot_dir"] / "metrics.csv"
             with corrupted.open("a") as stream:
                 stream.write("modified")

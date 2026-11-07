@@ -1,0 +1,8 @@
+{
+  "method": "tutorial_BenavoliCorrelatedT",
+  "difference": "B_minus_A",
+  "credible_mass": 0.95,
+  "sensitivity_rope_half_widths": [0.0025, 0.005, 0.01],
+  "contrast_policy": "all_one_factor_pairs_plus_prior_and_fixed_hypothesis_ablation",
+  "note": "The primary accuracy ROPE is read from the unchanged frozen training configuration. Sensitivity thresholds do not replace it."
+}
