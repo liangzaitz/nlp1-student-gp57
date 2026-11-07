@@ -1,71 +1,79 @@
-# Project 1: fixed-setting SNLI experiment
+# Project 1: fold-trained BPE and vocabulary-size selection
 
 The active experiment is entirely in [practical_1.ipynb](practical_1.ipynb).
-There is no hyperparameter search, separate validation-selection stage or result
-logging. Saved notebook outputs contain the result tables and graphs.
+Tune **only BPE vocabulary size: 1,000 / 2,000 / 3,000**. Keep all other
+hyperparameters fixed. Tables stay in notebook outputs; plots are exported as
+PNG and PDF. There are no trial logs or checkpoints.
 
-The fresh 2k experiment is **complete**: 45 CV fits, automatic indicator-MLP2
-selection, full refit and official test, with seven exported figure sets.
-Mean CV accuracy is **62.60%**; test accuracy is **74.48%**.
-Student code/error review and oral preparation remain.
+The fresh run is **complete**: 15 CV tokenizers, 135 classifier fits, automatic
+selection of 2k / indicators / MLP2, final refit and selected-model test. Mean CV
+accuracy is **62.69%**, test accuracy **74.48%**. Nine figure sets and all tables
+are saved. Student code/error review and oral preparation remain.
 
-## One experimental flow
+## Experimental flow
 
-1. Clean the pinned SNLI splits; combine training + validation and exclude exact
-   premises shared with test. This gives **559,164 development pairs**.
-2. Train one **2,000-token BPE** on both sentence roles of that development pool,
-   without labels or test text. Freeze it for CV, final fitting and test encoding.
-3. Select **60,002 rows** as complete premise groups, targeting 60,000 with seed 0.
-   Use one stratified five-fold group split, seed 0, for all nine systems.
-4. Compare indicators, unigram counts and pure bigram counts, each with logistic,
-   one-hidden-layer MLP and two-hidden-layer MLP. Learn bigram inventories and
-   classifier weights from fold-training rows only. Keep all training settings fixed.
-5. Display mean CV accuracy, fold SD, NLL and macro-F1 for every candidate.
-   Select highest mean accuracy, then lower mean NLL for an exact accuracy tie.
-6. Show paired Bayesian correlated-t comparisons and ROPE sensitivity. These
-   describe uncertainty and do not replace the stated model-selection rule.
-7. Inspect one repetition of OOF errors. Refit the selected classifier on all
-   development labels using the same shared BPE and fixed training schedule.
-   Relearn the final bigram inventory from the development pool if needed.
-8. Evaluate the final system on official test; show metrics, per-class scores,
-   confusion matrices, online training curves and a compact error table.
-   Add the tutorial-style fold boxplots with points, posterior/ROPE curves and
-   a ROPE sensitivity heatmap; export plots as PNG and PDF.
-9. Review code, scientific conclusions and errors as a group; prepare the oral.
+1. Load the pinned, cleaned SNLI splits. Combine training + validation and exclude
+   exact premises shared with test: **559,164 development pairs**.
+2. Keep the same **60,002-row** complete-premise-group subset, sampling seed 0.
+   Use the same five stratified grouped folds, split seed 0, for every candidate.
+3. For each fold and each vocabulary size, train a **new BPE on fold-training
+   premises and hypotheses only**. Fit its bigram inventory on those same rows.
+   Transform validation with these fixed mappings; never fit on validation text.
+4. Share that tokenizer/inventory across indicators, unigram counts and pure
+   bigram counts, each with logistic, MLP1 and MLP2: **15 CV tokenizers, 135 fits**.
+5. Show all 27 candidate summaries, the best system per vocabulary, and an
+   accuracy matrix/deltas versus 2k for each fixed representation/classifier.
+   Report dimensions, parameters, fit time and tokenization length too.
+6. Select highest mean CV accuracy; lower NLL breaks an exact tie. Remaining exact
+   ties use smaller vocabulary, then lexical representation/classifier order.
+   Show paired Bayesian comparisons and ROPE sensitivity as descriptive evidence.
+7. Inspect selected-system OOF errors. Train a **fresh tokenizer of the selected
+   size** and a fresh selected classifier on all development rows. Relearn the
+   final bigram inventory there. CV model weights are not transferred.
+8. Score **only that final selected pipeline** on official test. Display its
+   metrics, per-class scores, errors and diagnostic graphs.
+9. Review methods, results and errors as a group; prepare the oral assessment.
 
-## Frozen settings
+## Hyperparameters held fixed
 
 | Setting | Value |
 | --- | --- |
 | Dataset revision | `cdb5c3d5eed6ead6e5a341c8e56e669bb666725b` |
-| BPE | Vocabulary 2,000; minimum frequency 2; `[UNK]`; Metaspace; preserved case/punctuation |
-| Bigram features | Training-only inventory; frequency ≥2; maximum 2,000 types; no unigram fallback |
-| Pair features | Separate premise/hypothesis blocks; raw counts or binary presence; sparse float32 |
-| Logistic | L2, SAGA, C=1, at most 1,000 iterations, tolerance 0.0001 |
-| MLP hidden units | `[128]` or `[128, 64]` |
+| BPE tuning candidates | **1,000 / 2,000 / 3,000** |
+| Other BPE settings | Minimum frequency 2; `[UNK]`; Metaspace; preserved case/punctuation |
+| Bigram features | Frequency ≥2; **cap 2,000 at every BPE size**; no unigram fallback |
+| Pair features | Separate premise/hypothesis blocks; binary presence or raw counts; sparse float32 |
+| Logistic | L2, SAGA, C=1, maximum 1,000 iterations, tolerance 0.0001 |
+| Hidden units | `[128]` or `[128,64]` |
 | Activation/dropout | ReLU / 0.1 |
-| Optimizer | AdamW, learning rate 0.001, weight decay 0.0001 |
-| Batch / epochs | 128 / **3 in CV and final fitting**, no early stopping |
-| Sampling / split / model seeds | 0 / 0 / 0 |
-| Compute | CPU, one PyTorch thread; 45 CV fits |
-| Primary / supporting metrics | Accuracy / natural-log NLL and macro-F1 |
+| Neural optimizer | AdamW, learning rate 0.001, weight decay 0.0001 |
+| Batch/epochs | 128 / **3 in CV and final fitting**; no early stopping |
+| Sampling/split/model seeds | 0 / 0 / 0 |
+| Compute | CPU, one PyTorch thread; same five folds throughout |
+| Selection metric | Mean CV accuracy, then lower NLL for an exact tie |
+| Supporting metrics | Natural-log NLL, macro-F1, descriptive fold SD |
 | ROPE | ±0.005 accuracy; sensitivity ±0.0025 and ±0.01 |
 
-The single five-fold repetition keeps the fresh experiment affordable relative to
-our earlier approximately 15-minute target. Fewer paired scores mean greater
-Bayesian uncertainty than in the former three-repetition design.
+Indicator/unigram inputs have up to `2V` columns; pure bigrams have up to 4,000
+because the inventory cap remains fixed. Vocabulary size therefore changes
+segmentation and, for unigram inputs, model size. Matching dimensions across all
+three vocabulary candidates would also change the bigram cap, contrary to the
+single-hyperparameter design.
 
-## Interpretation boundary
+## Reporting and limitations
 
-The shared BPE has seen held-out CV text, without its labels. These scores are
-conditional on the shared tokenizer; they are not CV estimates of a pipeline
-whose preprocessing was entirely fitted inside each fold. Test text never
-enters learned preprocessing. Test-premise membership is used only to exclude
-overlapping development groups.
+Use paired vocabulary curves within each fixed system. A comparison of per-size
+winners may also change architecture/representation and is not a vocabulary-only
+contrast. Bayesian tables compare systems at the selected size and all vocabulary
+pairs for the selected system. These are post-selection descriptions using the
+same folds, not independent confirmation or global ranking probabilities.
 
-Earlier work already evaluated a different model on test and explored tuning.
-Those are historical facts, not stages of the current flow. This new experiment
-must not be described as a never-before-seen first test or an isolated estimate of
-the effect of vocabulary size. Historical configurations/results remain available
-for reference but are not loaded by the active notebook. See
-[findings](PROJECT1_FINDINGS.md) and [assistance](AI_ASSISTANCE.md).
+The best CV mean is a selection score among 27 candidates. It is not a nested-CV
+estimate of the complete selection procedure. Five correlated fold measurements
+provide limited posterior information. Final training uses much more labelled
+data than each CV fit, so rankings need not transfer perfectly to the full pool.
+
+Earlier work already inspected official test results. Disclose that history and
+keep current test scores out of all new selection decisions. Historical shared-BPE
+results and figures remain references; never substitute their metrics here.
+See [findings](PROJECT1_FINDINGS.md) and [assistance](AI_ASSISTANCE.md).

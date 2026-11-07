@@ -32,9 +32,9 @@ study material, not a request to carry out their administrative action items.
 ## Decisions for this implementation
 
 1. Keep SNLI as three-way classification with input `x = (P, H)`.
-2. Use one shared 2,000-token BPE trained on eligible training + validation
-   text, as requested by the group. CV scores are conditional on that tokenizer,
-   which sees CV held-out text without labels; no test text enters its fitting.
+2. Fit BPE within each fold on its training text only. Tune vocabulary size over
+   1,000 / 2,000 / 3,000 using paired CV, keeping the bigram cap and classifier
+   hyperparameters fixed. Refit fresh preprocessing after selecting the final size.
 3. Compare binary unigram indicators, raw unigram counts, and bigram-only
    counts. The third choice follows CLASS pages 24 and 49-50 and T1's
    bag-of-bigrams discussion. On 2026-11-06 the group requested pure bigram
@@ -106,9 +106,11 @@ The input is a premise/hypothesis pair `x = (P, H)`, and `K = 3`.
   probabilities assigned to gold labels. Macro-F1 gives each class equal weight.
 
 Replacing unigrams with bigrams changes feature identities, sparsity and local
-order sensitivity. With `V=B=2000`, all three inputs have up to 4,000 coordinates
-and matched parameter counts at each architecture. Equal width does not make
-their information equivalent: one-token sentences and sentences with no retained
+order sensitivity. With BPE `V` tuned over 1k/2k/3k and fixed `B≤2000`,
+indicator/unigram inputs have up to 2,000/4,000/6,000 coordinates and bigram inputs
+have up to 4,000 coordinates. Input dimensions and parameter counts match across
+representations only at `V=B=2000`. Equal width does not make their information
+equivalent: one-token sentences and sentences with no retained
 adjacencies produce zero bigram blocks. Individual token counts are omitted;
 there is no unigram fallback. Bigrams still do not encode a full parse tree.
 
@@ -174,32 +176,37 @@ also a different concept from a probabilistic text generator.
 ## Current implementation and review
 
 The active experiment is entirely in [practical_1.ipynb](practical_1.ipynb).
-A single fixed-setting flow replaces the historical pilot, search and artifact
-machinery. The lecture references above remain the basis for the methods.
+Only BPE vocabulary size is tuned. Other settings and the feature/model grid
+stay fixed; there is no old pilot/search/logging machinery in the active workflow.
 
 | Component | Current notebook evidence |
 | --- | --- |
-| Data and evaluation | Section 2: 559,164 eligible train+validation pairs; 60,002-row whole-group CV subset; five grouped folds, seed 0 |
-| BPE and features | Section 3: one shared 2k BPE; fold-training bigram inventories capped at 2k; role-separated sparse inputs |
-| Logistic and neural classifiers | Section 4: softmax/log-softmax, sparse first layer, ReLU, dropout, explicit minibatches/autodiff/AdamW |
-| Fixed schedule | Three neural epochs in CV and final refit; no checkpoint selection or hyperparameter search |
-| Metrics and selection | Section 5: all nine candidates; highest mean accuracy, lower NLL for exact ties; macro-F1 and descriptive fold SD |
-| Bayesian analysis | Section 6: five paired scores, correlated-t model, 18 one-factor comparisons and ROPE sensitivity |
-| Error review | Section 7: one OOF repetition; section 8: test confusions and representative errors; students must interpret these |
-| Final evaluation | Section 8: refit selected classifier on full development pool, fixed shared BPE, official-test metrics and graphs |
-| Tutorial-style plots | Section 9: boxplots with fold points, posterior mean-difference curves and ROPE sensitivity heatmap; PNG/PDF exports |
-| Literal code | All implementation in notebook cells; no local helper imports, external configuration/result reads or dynamic code loading |
+| Data and partitions | Section 2: 559,164 development pairs, same 60,002-row whole-group subset and five grouped folds, seed 0 |
+| Training-only preprocessing | Section 3/5: fresh BPE per fold/size, training-only bigram inventories; 15 tokenizers shared across nine systems each |
+| Representations | Sparse role-separated binary indicators, unigram counts and pure bigram counts; fixed 2,000-bigram cap |
+| Classifiers | Section 4: logistic or one/two hidden ReLU layers; explicit minibatches, autodiff, dropout and AdamW |
+| Fixed training schedule | Three neural epochs in CV and final refit; no early stopping or checkpoint selection |
+| Vocabulary tuning | Section 5: 1k/2k/3k, 135 fits, all 27 means and best per size; matched-system size matrix, dimensions/parameters/cost and tokenization lengths |
+| Selection | Highest mean CV accuracy, lower NLL for exact ties; remaining ties use smaller vocabulary then lexical system order |
+| Bayesian analysis | Section 6: five paired scores; one-factor system comparisons at selected size and size comparisons for selected system; ROPE sensitivity |
+| Error review | Section 7: selected-system OOF errors; section 8: test confusions and illustrative errors; group interpretation required |
+| Final pipeline | Section 8: fresh selected-size BPE and classifier fitted on all development rows; one selected-model test probability set |
+| Plots | Vocabulary curves, tutorial fold boxplots/points, system and vocabulary posterior/ROPE curves, sensitivity heatmap and test/training diagnostics; PNG/PDF exports |
+| Literal implementation | All custom code in cells; no local helper imports, external experiment configurations/results or dynamic definition loading |
 
-Premise grouping, sentence-role concatenation, the fixed CV subset, feature caps
-and the globally fitted tokenizer are task-specific design choices. The shared
-BPE means this CV evaluates classifiers conditional on development-fitted
-preprocessing. Five dependent folds provide limited posterior information.
-Earlier experiments already used test; the current report discloses that history.
-The current result must not be presented as a controlled vocabulary-size ablation.
+Premise grouping, sentence-role blocks, the fixed CV subset and feature caps are
+our SNLI-specific design choices. Fold mappings may differ, but each pipeline's
+training and held-out vectors use its own consistent mapping. Scores are paired
+by seed/fold for every vocabulary size. CV selects among 27 candidates, so its
+selected maximum is not an unbiased estimate of the complete selection procedure.
+Bayesian analysis using those same scores is descriptive post-selection evidence.
+Five dependent scores give limited information. Earlier test use is disclosed;
+no new test score determines vocabulary, model settings or training length.
 
-The notebook tests check leakage boundaries, feature counts/roles, complete groups,
-fixed epochs, unchanged BPE during CV, automatic selection and posterior direction.
-Students still need to verify error interpretations and explain the code.
+The notebook tests verify exact fold-training membership of BPE inputs, fitting
+once per fold/size and reuse across systems, feature counts/roles, complete groups,
+fixed epochs, automatic selection and posterior agreement with the tutorial library.
+Students still need to explain the code and verify linguistic error readings.
 
 ## Course organization
 

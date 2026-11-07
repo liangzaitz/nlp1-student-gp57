@@ -1,107 +1,138 @@
-# Project 1 findings: shared 2k BPE
+# Project 1 findings: fold-trained BPE and vocabulary size
 
-Updated 2026-11-07. These are the **fresh completed results** in
-[practical_1.ipynb](practical_1.ipynb), using one fixed-setting experiment.
-Historical pilot/tuning scores and previous test results are not part of these tables.
+Updated 2026-11-07. These are the completed results in
+[practical_1.ipynb](practical_1.ipynb). **Only BPE vocabulary size was tuned**:
+1,000 / 2,000 / 3,000. The final test score did not determine the selection.
 
-## Data and fixed design
+## Design and fitting boundaries
 
-SNLI revision `cdb5c3d5eed6ead6e5a341c8e56e669bb666725b` is pinned.
-Labels are `[entailment, neutral, contradiction]`, IDs `[0, 1, 2]`.
+SNLI revision `cdb5c3d5eed6ead6e5a341c8e56e669bb666725b` is pinned. The cleaned
+source splits have 549,367 training, 9,842 validation and 9,824 test pairs.
+Combining training + validation and excluding 45 exact-test-premise overlaps gives
+**559,164 eligible development pairs**. Exact-premise grouping controls repeated
+premises, not all possible semantic near-duplicates.
 
-| Pool | Rows | Use |
-| --- | ---: | --- |
-| Clean official train | 549,367 | Source data |
-| Clean official validation | 9,842 | Source data |
-| Eligible train + validation | 559,164 | Shared BPE and final classifier fitting |
-| Fixed CV subset | 60,002 | Complete premise groups, target 60,000, sampling seed 0 |
-| Clean official test | 9,824 | Final selected-system evaluation |
+CV uses the unchanged **60,002-row** complete-group sample, sampling seed 0, and
+five StratifiedGroupKFold partitions, split seed 0. Each classifier trains on
+about 48,000 pairs and validates on about 12,000. All candidates use the same folds.
 
-Exact premises shared with test are excluded from the development pool. Grouped
-folds keep all pairs sharing an exact premise together; this does not remove all
-possible semantic near-duplicates. Test-premise membership is used only for
-exclusions; no test text enters learned preprocessing.
+For each fold/size, fit **BPE on that training partition's text only**, then its
+bigram inventory. Encode held-out text using those fixed mappings. Share the
+fitted preprocessing across its nine representation/classifier combinations.
+There are **15 CV tokenizers and 135 classifier fits**. Different folds may use
+different coordinates; each individual pipeline remains internally consistent.
 
-One BPE is trained on all eligible development text, from both sentence roles:
-**2,000 actual tokens**, minimum frequency 2, Metaspace, no case normalization.
-It is fixed throughout CV and final refitting. Each fold learns a separate
-training-only bigram inventory, frequency ≥2 and at most **2,000 types**.
-Inputs are `[premise features; hypothesis features]`, with up to 4,000 columns.
-Pure bigrams contain no unigram fallback.
+Other settings remain fixed: minimum BPE merge frequency 2, `[UNK]`, Metaspace,
+preserved case/punctuation, bigram minimum frequency 2 and **cap 2,000 at all
+sizes**. Inputs concatenate premise and hypothesis feature blocks. Pure bigrams
+have no unigram fallback. Logistic uses L2/SAGA, C=1, max_iter=1000, tolerance
+0.0001. Neural models use `[128]` or `[128,64]`, ReLU/dropout 0.1, AdamW learning
+rate 0.001/weight decay 0.0001, batch 128 and **three fixed epochs**, model seed 0,
+CPU/one PyTorch thread. There is no early stopping or other hyperparameter search.
 
-CV uses **five StratifiedGroupKFold folds, split seed 0**, with the same partitions
-for all nine candidates. Model seed is 0. Logistic uses L2/SAGA, C=1, maximum
-1,000 iterations and tolerance 0.0001. MLPs use `[128]` or `[128,64]` ReLU units,
-dropout 0.1, AdamW learning rate 0.001, weight decay 0.0001 and batch size 128.
-Neural training uses **three fixed epochs in both CV and the final fit**.
-There is no hyperparameter search, early stopping or accuracy-based checkpoint selection.
+## Best tested system per vocabulary
 
-The tokenizer sees CV held-out text without labels, so CV scores are conditional
-on shared development-fitted BPE, rather than an entirely fold-fitted pipeline.
-This design was explicitly requested. No claim is made that these settings are optimal.
+These are equal-weight mean CV scores over five folds. Per-size winners may use
+different representations; differences between these rows are not vocabulary-only
+contrasts. The next table holds each representation/classifier fixed instead.
 
-## Fresh CV results
-
-Equal-weight means over five folds; SD is descriptive fold variation in percentage
-points, not a confidence interval or independent-sample standard error.
-All 15 logistic fits met the configured convergence criterion. There were **45 fits**.
-CV took **3.09 minutes**; shared BPE fitting took **2.57 seconds**.
-
-| Features | Classifier | Mean accuracy | Fold SD (pp) | NLL | Macro-F1 |
+| BPE size | Best system | Mean accuracy | Fold SD (pp) | NLL | Macro-F1 |
 | --- | --- | ---: | ---: | ---: | ---: |
-| Indicators | MLP2 | **62.60%** | 0.63 | **0.8394** | 0.6245 |
-| Unigram counts | MLP2 | 62.59% | 0.79 | 0.8408 | 0.6243 |
-| Unigram counts | MLP1 | 61.95% | 0.68 | 0.8459 | 0.6183 |
-| Indicators | MLP1 | 61.92% | 0.49 | 0.8457 | 0.6179 |
-| Indicators | Logistic | 60.52% | 0.51 | 0.8965 | 0.6043 |
-| Unigram counts | Logistic | 60.41% | 0.52 | 0.8965 | 0.6032 |
-| Pure bigram counts | MLP1 | 53.78% | 0.25 | 0.9499 | 0.5367 |
-| Pure bigram counts | MLP2 | 53.66% | 0.33 | 0.9533 | 0.5338 |
-| Pure bigram counts | Logistic | 52.75% | 0.31 | 0.9778 | 0.5265 |
+| 1,000 | Unigram counts / MLP2 | 62.27% | 0.70 | 0.8415 | 0.6207 |
+| **2,000** | **Indicators / MLP2** | **62.69%** | **0.65** | **0.8400** | **0.6253** |
+| 3,000 | Indicators / MLP2 | 62.55% | 0.76 | 0.8469 | 0.6237 |
 
-The stated rule automatically selects **indicators + the two-hidden-layer MLP**:
-highest unrounded mean accuracy, with NLL breaking an exact tie. It also has the
-lowest mean NLL here. The near tie with unigram MLP2 does not establish a useful
-practical advantage. Pure bigrams underperform under this particular fixed cap
-and schedule; the result does not show that all bigram approaches are inferior.
+The fixed rule selects **2,000 BPE tokens + indicators + MLP2**, using highest
+unrounded mean accuracy and lower NLL only for an exact accuracy tie. Further
+exact ties use smaller vocabulary, then lexical representation/classifier order.
+This is the best tested candidate under the stated settings, not a proven optimum.
 
-## Bayesian analysis and ROPE
+## Controlled vocabulary comparison
 
-Use five paired scores and the Bayesian correlated-t posterior, with differences
-**B − A**, `df=4`, and Student scale squared
-`sample_variance(differences) * (1/5 + 1/4)`. The implementation agrees with the
-underlying `baycomp` library used by the tutorial. There are **18 one-factor
-comparisons** and three ROPE widths, **54 sensitivity rows**.
+Mean CV accuracy for the same representation/classifier at each size:
 
-The primary ROPE is **±0.5 percentage points**: a project judgement about the
-smallest practically interesting accuracy difference. Sensitivity widths are
-±0.25 and ±1 pp. Pairwise probabilities do not give global ranking probabilities.
+| Features | Classifier | 1,000 | 2,000 | 3,000 |
+| --- | --- | ---: | ---: | ---: |
+| Indicators | Logistic | 59.77% | 60.47% | 60.52% |
+| Indicators | MLP1 | 61.32% | 61.93% | 62.18% |
+| Indicators | MLP2 | 62.25% | **62.69%** | 62.55% |
+| Unigram counts | Logistic | 59.74% | 60.53% | 60.43% |
+| Unigram counts | MLP1 | 61.44% | 62.09% | 62.28% |
+| Unigram counts | MLP2 | 62.27% | 62.54% | 62.50% |
+| Pure bigram counts | Logistic | 54.82% | 52.95% | 52.29% |
+| Pure bigram counts | MLP1 | 55.82% | 53.91% | 53.25% |
+| Pure bigram counts | MLP2 | 55.80% | 54.03% | 53.35% |
 
-- Indicator MLP2 versus unigram MLP2: **97.75%** probability inside the primary ROPE.
-- Indicators versus unigram counts with MLP1: **97.95%** inside the primary ROPE.
-- Unigram MLP2 minus MLP1: mean **+0.64 pp**, 95% interval **+0.02 to +1.25 pp**;
-  P(B better beyond the ROPE) **71.51%**, P(ROPE) **28.15%**.
-- For that depth comparison, equivalence probability changes from **6.95%** to
-  **28.15%** to **91.14%** as the half-width increases from 0.25 to 0.5 to 1 pp.
-- Pure bigram MLP1 versus unigram MLP1: mean **−8.17 pp**, with a 95% interval
-  **−9.72 to −6.62 pp**. This difference persists across the chosen ROPE widths.
+Larger vocabularies are not uniformly better. Indicator/unigram MLP1 improves
+through 3k, whereas both MLP2 versions peak at 2k. Every pure-bigram classifier
+performs best at 1k under the fixed 2k inventory cap. This concerns these feature
+caps and training settings, not the general usefulness of bigrams.
 
-Only one CV repetition is used. The correlated-normal/common-correlation model
-is an approximation, and five dependent scores give limited information. These
-probabilities describe this subset, shared tokenizer, fixed settings and splits.
-They do not override the predeclared accuracy-based selection rule.
+The notebook includes all 27 summaries with NLL/F1, deltas relative to 2k,
+dimensions, parameter counts, mean fit time and a collapsed table of all 135 fold
+measurements. Fold SD describes dependent-fold variability, not a confidence interval.
 
-## Full refit and official test
+## Segmentation and model cost
 
-Fit a fresh indicator MLP2 on all **559,164** eligible development pairs, using the
-same 2k BPE, model seed 0 and three epochs. Input dimension is **4,000**, with
-hidden layers **128 → 64**. Final preparation/fitting took **51.54 seconds**.
-Then generate one test probability set for this fitted model; all test plots and
-reports reuse those predictions.
+All folds reached their requested vocabulary sizes and retained 2,000 bigram types.
+Validation token lengths count both sentence roles together. Costs below keep
+**indicators / MLP2** fixed; fit seconds exclude preprocessing and prediction and
+are descriptive CPU observations, not a controlled performance benchmark.
+
+| BPE size | Mean validation tokens/pair | Input dimensions | Parameters | Mean classifier fit (s) |
+| --- | ---: | ---: | ---: | ---: |
+| 1,000 | 31.00 | 2,000 | 264,579 | 2.33 |
+| 2,000 | 26.57 | 4,000 | 520,579 | 3.93 |
+| 3,000 | 24.77 | 6,000 | 776,579 | 5.67 |
+
+Bigger BPE shortens token sequences while enlarging indicator/unigram feature
+vectors and models. Pure bigram input remains 4,000 dimensions at every size.
+Thus the experiment tunes vocabulary size as a pipeline setting, including its
+segmentation and model-size effects. It does not hold neural parameter count fixed.
+
+## Paired Bayesian evidence
+
+The tutorial's correlated-t posterior uses five matched fold differences **B−A**,
+`df=4` and scale squared `sample_variance * (1/5 + 1/4)`. The primary ROPE is
+±0.5 percentage points, with ±0.25 and ±1 pp sensitivity. This is a project
+judgement about practical relevance. Comparisons are descriptive **post-selection**
+evidence using the same CV scores, not independent confirmation or global ranks.
+
+For the fixed selected system, indicators / MLP2:
+
+| A → B | Mean difference (pp) | 95% interval (pp) | P(A better beyond ROPE) | P(inside ROPE) | P(B better beyond ROPE) |
+| --- | ---: | --- | ---: | ---: | ---: |
+| 1k → 2k | +0.43 | [−0.31, +1.18] | 1.28% | 57.89% | 40.83% |
+| 1k → 3k | +0.29 | [−0.30, +0.89] | 1.03% | 79.59% | 19.39% |
+| 2k → 3k | −0.14 | [−0.94, +0.66] | 13.92% | 81.58% | 4.49% |
+
+These do not establish strong practical superiority of 2k. Its selection follows
+the fixed highest-accuracy rule. For 2k versus 3k, equivalence probability changes
+from **51.63% / 81.58% / 97.16%** at half-widths 0.25 / 0.5 / 1 pp.
+There are 18 one-factor system comparisons at the selected size, three vocabulary
+comparisons for the selected system, and **63 sensitivity rows** in total.
+
+The correlated-normal/common-correlation model is an approximation. One five-fold
+repetition provides limited information. Selecting among 27 candidates makes the
+maximum CV mean optimistic as an estimate of the complete selection procedure;
+there is no nested outer CV in this budgeted experiment.
+
+## Final refit and official test
+
+After selecting from CV, fit a **new 2k BPE** and fresh indicator MLP2 on all
+559,164 development pairs. Keep the same three epochs and other settings.
+CV took **10.09 minutes**; final preprocessing/fitting took **60.25 seconds**.
+All **45 logistic fits** met the configured convergence criterion.
+
+Only the selected final pipeline was evaluated on official test in this run.
+It selects the same final recipe as the earlier shared-2k experiment, and its
+fresh refit reproduces the same test result. This is not a test-accuracy gain from
+tuning. The CV preprocessing boundary has changed, while final fitting in both
+experiments learns preprocessing on all eligible development text.
 
 | Test metric | Result |
 | --- | ---: |
-| Accuracy | **74.48%** (7,317 / 9,824 correct) |
+| Accuracy | **74.48%** (7,317 / 9,824) |
 | NLL | **0.6210** |
 | Macro-F1 | **0.7439** |
 
@@ -111,59 +142,38 @@ reports reuse those predictions.
 | Neutral | 0.6920 | 0.7015 | 0.6967 | 3,219 |
 | Contradiction | 0.7989 | 0.7130 | 0.7535 | 3,237 |
 
-Confusion matrix, rows gold and columns predicted in the class order above:
+The test confusion matrix is rows gold/columns predicted in that class order:
+`[[2751,444,173],[553,2258,408],[368,561,2308]]`.
+Online training accuracy reaches about 76.4%; it is measured during updates with
+dropout active, not on held-out data. CV fits train on about 48k labels versus
+559k at final refitting, and evaluate different examples; the CV-to-test difference
+is not an isolated effect of training size.
 
-| | Entailment | Neutral | Contradiction |
-| --- | ---: | ---: | ---: |
-| Entailment | 2,751 | 444 | 173 |
-| Neutral | 553 | 2,258 | 408 |
-| Contradiction | 368 | 561 | 2,308 |
+The notebook shows 12 selected-system OOF errors and 12 test errors in fixed
+source order. Examples include a choir's church/baseball venue conflict predicted
+as entailment and an unsupported age claim (“The woman is young”) predicted as
+entailment. These illustrate contextual-inference failures; they do not establish
+one cause for all errors or category prevalence. Student review remains required.
 
-Training curves are online minibatch measurements, with dropout active and
-parameters changing throughout each epoch. Their last accuracy is about **76.4%**;
-it is not held-out accuracy or the final model evaluated on the complete training
-pool. CV classifiers saw about 48,000 labelled pairs per fold, whereas the final
-classifier saw 559,164; the evaluation examples also differ. The CV-to-test change
-is not an isolated estimate of the benefit of more training data.
-
-## Error review and limitations
-
-The notebook displays the first 12 OOF errors for the selected system and the
-first 12 test errors, in fixed source order. These are illustrative cases, not a
-random sample for estimating linguistic error-category frequencies.
-
-- A choir singing at church versus a choir singing at a baseball game is gold
-  contradiction but predicted entailment: the model fails a venue conflict despite
-  shared activity words.
-- A woman with a green headscarf versus “The woman is young” is gold neutral but
-  predicted entailment: age is unsupported by the premise.
-- A Land Rover crossing a river versus splashing water while crossing is gold
-  entailment but predicted neutral: the inference needs more than matching words.
-
-These examples illustrate limitations in sentence interaction and contextual
-inference; they do not establish the causal mechanism of every error. Students
-should review the examples, interpretations and gold-label conventions.
-
-Earlier experiments already explored tuning and evaluated a different model on
-test. The interrupted shared-8k run completed no new test evaluation. This fresh
-2k experiment follows the newly agreed fixed protocol; it must not be described
-as a never-before-seen first test. Because several design elements differ from
-earlier experiments, it is not a controlled vocabulary-size ablation.
+Earlier project work already inspected test. This fresh run keeps test scores out
+of its selection, but is not an untouched first test evaluation. Further setting
+changes should use development evidence.
 
 ## Plots and verification
 
-All seven figure sets are inline and exported as PNG and PDF under
-[figures/project1_2k](figures/project1_2k/): CV means, tutorial-style fold boxplots
-with points, Bayesian posterior/ROPE curves, ROPE sensitivity heatmap, test
-confusions, per-class metrics and training curves.
+Nine figure sets are inline and exported as PNG/PDF under
+[figures/project1_vocab_cv/](figures/project1_vocab_cv/), including vocabulary
+accuracy/NLL curves, selected-size fold boxplots/points, system and vocabulary
+posterior/ROPE curves, sensitivity heatmap, test confusions/class metrics and
+training curves. The historical shared-2k figure folder is not used here.
 
-The main notebook has **31 cells, 18 code cells and 710 code lines**. Every code cell executed in a fresh kernel with
-no error, warning or widget outputs. No project helper modules, external result
-files or JSON configurations are loaded. The notebook writes figures only;
-experiment tables stay in its outputs.
+All 64 repository tests passed. The main notebook executed in a fresh kernel
+without error/warning/widget outputs. An independent audit recomputed selection
+from the 135 embedded fold records and checked pairing, dimensions, parameter
+counts and integer correct-count consistency. Each fold/size's BPE training-row
+membership is checked by the notebook tests. All implementation remains literal
+in notebook cells, with no project helper imports or external experiment-result
+reads. Only figures are written; tables remain in notebook outputs.
 
-The 62-test repository suite passed, followed by an additional passing check of
-the new posterior scale/probabilities against the tutorial library (**63 checks**
-in total). Package consistency also passed. These checks establish software
-behaviour, not student review or scientific optimality. Group code/error review
-and oral preparation remain. See [AI assistance](AI_ASSISTANCE.md).
+Group code/error review and oral preparation remain. See [plan](PROJECT1_PLAN.md)
+and [AI assistance](AI_ASSISTANCE.md).

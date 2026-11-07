@@ -1,74 +1,78 @@
 # Project 1: SNLI
 
-Open [practical_1.ipynb](practical_1.ipynb). All custom code is written in its
-cells; it does not import project helper modules or read external experiment
-configurations/results. The notebook has one fixed-setting experiment:
+Open [practical_1.ipynb](practical_1.ipynb). All custom implementation and result
+tables are in notebook cells. It does not import project helper modules or read
+external experiment configurations/results.
 
-**Training + validation → shared 2k BPE → grouped CV → best model → full refit → test.**
+**Grouped CV → fold-trained BPE at 1k/2k/3k → select one candidate → full refit → test.**
 
-The nine candidates combine indicators, unigram counts or pure bigram counts
-with logistic regression or a one-/two-hidden-layer MLP. Settings are in one
-`BASE` dictionary. There is no hyperparameter search or early stopping. Final
-neural training uses the same three epochs as CV.
+Vocabulary size is the only tuned hyperparameter. At every size, compare
+indicators, unigram counts and pure bigram counts with logistic regression,
+one-hidden-layer MLP and two-hidden-layer MLP. Keep the bigram cap at 2,000 and
+all classifier settings fixed, including three neural epochs in CV and final fitting.
 
 ## Run
 
-Select `.venv/bin/python` as the notebook kernel, or launch Jupyter:
+Choose `.venv/bin/python` as the notebook kernel, or launch:
 
 ```bash
 source .venv/bin/activate
 jupyter lab part1/practical_1.ipynb
 ```
 
-**Run All performs fresh fitting**, including 45 CV fits and the selected final
-model. It saves results in notebook outputs only, with tables and graphs inline.
-Save the notebook after execution. No trial logs, checkpoints or result tables are written to files.
-Plots are also exported as PNG and PDF to `figures/project1_2k/`. Existing cleaned SNLI data are reused; a fresh checkout downloads the
-pinned revision through Hugging Face. Data remain excluded from Git.
+Run All performs **fresh fitting**: 15 CV tokenizers, 135 classifiers, then one
+fresh final tokenizer/classifier. Save the executed notebook to retain the tables.
+No result CSVs, trial logs or model checkpoints are written. PNG/PDF plots go to
+[figures/project1_vocab_cv/](figures/project1_vocab_cv/). Existing cleaned SNLI is
+reused; a fresh checkout downloads the pinned revision through Hugging Face.
 
-For a new environment, use Python 3.12 and install the root `requirements.txt`
-(or the recorded `environment.txt` snapshot with the CPU PyTorch index described
-there). The repaired current environment uses the `.venv` interpreter.
+Use Python 3.12 and the root `requirements.txt`, or recreate the recorded CPU
+PyTorch environment with `environment.txt` and its stated package index.
 
-## Read the results
+## Read the report
 
 | Section | Content |
 | --- | --- |
-| 1 | One frozen configuration |
-| 2 | Source splits, eligible development pool and grouped CV subset |
-| 3–4 | Shared BPE, sparse representations, models and fixed training loop |
-| 5 | All nine CV results, comparison graph and automatic winner selection |
-| 6 | Paired Bayesian comparisons and visible ROPE sensitivity table |
-| 7 | Selected model's out-of-fold errors |
-| 8 | Full-pool refit, official-test table, per-class scores and graphs |
-| 9 | Tutorial-style fold boxplots/points, Bayesian posterior curves and ROPE heatmap |
+| 1–2 | Fixed settings, eligible development pool and shared grouped folds |
+| 3–4 | Training-only BPE/features and explicit fixed-epoch classifier fitting |
+| 5 | Best per vocabulary, all 27 candidates, controlled size comparisons, dimensions/cost and vocabulary curves |
+| 6 | Paired Bayesian system/size comparisons and ROPE sensitivity |
+| 7 | One OOF repetition for selected-system errors |
+| 8 | New selected-size BPE, full-data refit and selected-model-only official-test results |
+| 9 | Tutorial-style fold boxplots/points, posterior/ROPE curves and sensitivity heatmap |
 
-BPE is trained once on **559,164 eligible training + validation pairs**, excluding
-test-premise overlaps. CV uses **60,002 rows**, one five-fold split and model seed
-0. Because BPE sees CV held-out text without labels, these scores are conditional
-on the shared tokenizer. Bigram inventories and model weights use fold-training
-rows only. The official test is excluded from learned preprocessing.
+Development contains **559,164** training + validation pairs after excluding exact
+test-premise overlaps. CV uses the unchanged **60,002-row** complete-group sample,
+five folds and seed 0. Each fold/size fits BPE and its inventory only on training
+text, and shares them across its nine classifiers. A fold's models and validation
+rows use the same coordinates; other folds may learn different coordinates.
 
-Earlier work already evaluated another model on test. The notebook states that
-history explicitly; it does not substitute historical test scores for this fit.
-Historical Python modules, JSON configurations and `practical_1_details.ipynb`
-remain reference material and are not dependencies of the current experiment.
+Choose the highest unrounded mean CV accuracy, lower NLL for an exact tie, then
+smaller vocabulary and lexical system order. All three sizes use the same folds.
+The selected CV maximum and subsequent Bayesian comparisons are post-selection
+evidence, not an unbiased nested-CV performance estimate. Official test scores
+are generated only for the selected final pipeline. Earlier test use is disclosed.
 
-## Completed fresh results
+Historical `figures/project1_2k/`, Python modules, JSON configurations and the
+`practical_1_details.ipynb` archive are not used by the active experiment.
 
-The selected **indicator MLP2** achieved **62.60% mean CV accuracy** and
-**74.48% test accuracy**, with test NLL **0.6210** and macro-F1 **0.7439**.
-CV took **3.09 minutes**; full preparation/refitting took **51.54 seconds**.
-The notebook contains all nine candidates and their uncertainty analysis.
+## Completed results
 
-Seven figure sets are displayed inline and exported in
-[figures/project1_2k/](figures/project1_2k/) as PNG and PDF. In particular:
+| BPE size | Best tested CV system | Mean CV accuracy |
+| --- | --- | ---: |
+| 1,000 | Unigram counts / MLP2 | 62.27% |
+| **2,000** | **Indicators / MLP2** | **62.69%** |
+| 3,000 | Indicators / MLP2 | 62.55% |
 
-- [Fold boxplots with individual scores](figures/project1_2k/cv_boxplots_and_points.png)
-- [Bayesian posteriors and ROPE](figures/project1_2k/bayesian_posteriors_rope.png)
-- [ROPE sensitivity](figures/project1_2k/rope_sensitivity.png)
-- [Test confusion matrices](figures/project1_2k/test_confusion.png)
-- [Training curves](figures/project1_2k/training_curves.png)
+The fixed rule selects 2k. Differences are small; see the matched-system curves
+and posterior probabilities. Full refitting reproduces **74.48% test accuracy**,
+NLL **0.6210**, macro-F1 **0.7439**. It selects the same final recipe as before.
+CV took **10.09 minutes**, final preprocessing/fitting **60.25 seconds**.
+
+All nine figure sets are inline and exported as PNG/PDF. Start with
+[vocabulary effects](figures/project1_vocab_cv/vocabulary_effect.png),
+[vocabulary posteriors](figures/project1_vocab_cv/vocabulary_posteriors.png) and
+[fold scores](figures/project1_vocab_cv/cv_boxplots_and_points.png).
 
 ## Verification and sources
 
@@ -76,9 +80,9 @@ Seven figure sets are displayed inline and exported in
 .venv/bin/python -m unittest discover -s part1/tests -v
 ```
 
-The notebook tests cover literal inline definitions, test exclusion, complete
-premise groups, feature values/boundaries, fixed epochs, shared-tokenizer CV,
-selection and Bayesian direction. Other tests cover the retained historical modules.
+Notebook tests check training-only BPE membership for every fold/size, tokenizer
+reuse across systems, held-out coverage, feature counts/boundaries, fixed epochs,
+selection and paired posterior calculations. Other tests cover retained modules.
 See [requirements](project.ipynb), [plan](PROJECT1_PLAN.md),
 [findings](PROJECT1_FINDINGS.md), [course methods](COURSE_METHODS.md) and
 [AI assistance](AI_ASSISTANCE.md).

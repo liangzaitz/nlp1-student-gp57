@@ -611,3 +611,45 @@ that every student has reviewed or can explain the implementation.
   test; the new result is not an untouched first test or a vocabulary ablation.
 - Student work remains: review/explain code and verify linguistic error readings,
   understand the shared-tokenizer CV limitation, and prepare the oral assessment.
+
+## 2026-11-07: training-only fold BPE and one-parameter vocabulary tuning
+
+- User direction: remove shared development-fitted BPE from CV and train separate
+  tokenizers inside each training fold; tune only vocabulary size over 1k/2k/3k,
+  preserving the current representations, architectures and simple notebook flow.
+- Move BPE fitting inside the fold/size loop. Pass training text columns only,
+  learn the inventory on training tokens, and reuse the mapping across all nine
+  systems in that unit. Keep the 2k bigram cap, min frequencies, optimizer,
+  regularization, seeds, sampling, folds and three-epoch schedule fixed.
+- Run 15 CV tokenizers and 135 classifiers on the same 60,002-row group subset.
+  All 45 logistic fits converge. CV completes in 10.09 minutes. Select highest
+  unrounded mean accuracy among all 27 candidates, then lower NLL for exact ties;
+  remaining exact ties use smaller vocabulary and lexical system order.
+- Report best per size, all 27 summaries, matched-system accuracy matrix/deltas,
+  input dimensions, parameters, fit time, segmentation length and all 135 fold
+  measurements in a collapsed notebook table. Tables are not logged to files.
+- Best per-size accuracies are 62.27% / 62.69% / 62.55%; the 1k winner is unigram
+  MLP2 and 2k/3k winners are indicator MLP2. Select 2k indicators/MLP2. Explain
+  controlled within-system vocabulary comparisons and the model-size effects.
+- Add selected-system vocabulary posteriors, keeping the existing system
+  comparisons at the selected size and expanding ROPE sensitivity to 63 rows.
+  Show that 2k/3k has 81.58% probability inside ±0.5 pp, without claiming a strong
+  universal optimum. Label analyses as descriptive post-selection evidence;
+  no nested outer CV is claimed for selection among 27 candidates.
+- Fit a new selected-size BPE and fresh classifier on all 559,164 eligible
+  development pairs in 60.25 seconds. Score only the selected final pipeline
+  on test. The selected final recipe is unchanged from the previous run and
+  reproduces accuracy 74.48%, NLL 0.6210, macro-F1 0.7439. Prior test use remains
+  disclosed; no new test score chooses settings. This is not a test-accuracy gain.
+- Add vocabulary accuracy/NLL curves and paired vocabulary posterior plots;
+  retain tutorial boxplots with fold points, system posteriors/ROPE, sensitivity,
+  confusions/class metrics and training curves. Export nine PNG/PDF figure sets
+  under `figures/project1_vocab_cv/`; historical figures are not substituted.
+- Update meaningful tests to record BPE training membership and exact fit count
+  per fold/size, ensure shared reuse across systems and complete held-out coverage,
+  and test controlled vocabulary posterior pairing. All 64 repository tests pass.
+  Execute all notebook code in a fresh kernel; independently audit all 135 embedded
+  fold records for pairing, selection, dimensions, parameters and correct counts.
+- Update the notebook interpretation, plan, findings, README, course-method map,
+  historical-configuration notes and assistance record. Student code/error review
+  and oral preparation remain; the work is not submitted or pushed by this step.

@@ -47,7 +47,7 @@ def definitions():
     return module
 
 
-class TestSharedBPENotebook(unittest.TestCase):
+class TestFoldBPENotebook(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.n = definitions()
@@ -60,7 +60,7 @@ class TestSharedBPENotebook(unittest.TestCase):
 
     def config(self):
         config = deepcopy(self.n.BASE)
-        config.update(vocab_size=64, bpe_min_frequency=1, bigram_min_frequency=1,
+        config.update(vocab_sizes=[48, 64], bpe_min_frequency=1, bigram_min_frequency=1,
                       max_bigrams=32, epochs=2, batch_size=6,
                       hidden_dims={'mlp_one_hidden': [8], 'mlp_two_hidden': [8, 4]},
                       n_splits=3, cv_seeds=[0])
@@ -84,12 +84,12 @@ class TestSharedBPENotebook(unittest.TestCase):
         self.assertEqual(len(development), len(train) + len(validation) - 3)
         self.assertEqual(set(development.source_split), {'train', 'validation'})
         self.assertTrue(set(development.premise).isdisjoint(test.premise))
-        tokenizer = self.n.fit_tokenizer(development[['premise', 'hypothesis']], self.config())
+        tokenizer = self.n.fit_tokenizer(development[['premise', 'hypothesis']], 64, self.config())
         self.assertNotIn('☃', ''.join(tokenizer.get_vocab()))
 
     def test_features_match_direct_counts_and_never_cross_roles(self):
         n, config = self.n, self.config()
-        tokenizer = n.fit_tokenizer(self.frame(), config)
+        tokenizer = n.fit_tokenizer(self.frame(), 64, config)
         encoder = n.PairEncoder(tokenizer, n.learn_bigrams(n.encode_pairs(tokenizer, self.frame()), config))
         frame = pd.DataFrame({'premise': ['CAT cat', '', 'cat', '', ''],
                               'hypothesis': ['', 'YES cat', 'cat cat', '', 'cat']})
@@ -134,27 +134,54 @@ class TestSharedBPENotebook(unittest.TestCase):
             np.testing.assert_array_equal(probabilities, self.n.predict_proba(repeated, features))
             self.assertEqual(len(model['history']), 0 if classifier == 'logistic' else config['epochs'])
 
-    def test_cv_reuses_bpe_and_covers_all_heldout_examples(self):
+    def test_cv_fits_each_bpe_on_fold_training_only_and_covers_heldout_rows(self):
         n, config, frame = self.n, self.config(), self.frame()
-        tokenizer = n.fit_tokenizer(frame, config)
-        original = tokenizer.to_str()
         assignments = n.make_assignments(frame, config)
-        with patch.object(n, 'fit_tokenizer', side_effect=AssertionError('BPE must not refit inside CV')):
-            results, predictions = n.run_cv(frame, assignments, tokenizer, config)
-        self.assertEqual(tokenizer.to_str(), original)
-        self.assertEqual(len(results), 3 * 9)
-        self.assertEqual(len(predictions), len(frame) * 9)
-        self.assertFalse(predictions.duplicated(['row', 'representation', 'classifier']).any())
+        training_calls, original = [], n.fit_tokenizer
+
+        def record_fit(text, vocab_size, settings):
+            self.assertEqual(list(text.columns), ['premise', 'hypothesis'])
+            training_calls.append((set(text.index), vocab_size))
+            return original(text, vocab_size, settings)
+
+        with patch.object(n, 'fit_tokenizer', side_effect=record_fit):
+            results, predictions = n.run_cv(frame, assignments, config)
+        self.assertEqual(len(training_calls), 3 * 2)
+        for fold in range(3):
+            expected = set(frame.index[~assignments.fold_seed_0.eq(fold)])
+            for offset, vocab_size in enumerate(config['vocab_sizes']):
+                self.assertEqual(training_calls[fold * 2 + offset], (expected, vocab_size))
+        self.assertEqual(len(results), 3 * 2 * 9)
+        self.assertEqual(len(predictions), len(frame) * 2 * 9)
+        self.assertFalse(predictions.duplicated(['row', 'vocab_size', 'representation', 'classifier']).any())
+        for (size, representation, classifier), rows in predictions.groupby(
+                ['vocab_size', 'representation', 'classifier']):
+            self.assertEqual(set(rows.row), set(frame.index))
 
     def test_selection_uses_accuracy_then_nll(self):
         results = pd.DataFrame([
-            {'representation': representation, 'classifier': 'logistic', 'fold': fold,
-             'accuracy': accuracy, 'nll': nll, 'macro_f1': accuracy, 'converged': True}
+            {'vocab_size': 2000, 'representation': representation, 'classifier': 'logistic', 'fold': fold,
+             'accuracy': accuracy, 'nll': nll, 'macro_f1': accuracy, 'converged': True,
+             'input_dimensions': 4, 'parameters': 15, 'fit_seconds': .1}
             for representation, accuracy, nll in [('indicators', .6, .8),
                                                   ('unigram_counts', .6, .7), ('bigram_counts', .5, .6)]
             for fold in [0, 1]
         ])
         self.assertEqual(self.n.summarise_cv(results).iloc[0].representation, 'unigram_counts')
+
+    def test_vocabulary_comparison_pairs_folds_and_holds_system_fixed(self):
+        rows = []
+        for size, offset in [(1000, 0), (2000, .01), (3000, .02)]:
+            for fold in range(5):
+                rows.append({'seed': 0, 'fold': fold, 'vocab_size': size,
+                             'representation': 'indicators', 'classifier': 'logistic',
+                             'accuracy': .6 + .001 * fold + offset})
+                rows.append({'seed': 0, 'fold': fold, 'vocab_size': size,
+                             'representation': 'unigram_counts', 'classifier': 'logistic',
+                             'accuracy': .9})
+        result = self.n.vocabulary_comparisons(pd.DataFrame(rows), 'indicators', 'logistic', .005)
+        self.assertEqual(len(result), 3)
+        np.testing.assert_allclose(result.difference_B_minus_A, [.01, .02, .01], atol=1e-12)
 
     def test_metrics_and_posterior_direction(self):
         metrics = self.n.score(np.arange(3), np.eye(3))

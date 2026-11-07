@@ -1,8 +1,9 @@
 # Historical configurations
 
 The active experiment keeps its fixed settings in the `BASE` cell of
-[practical_1.ipynb](../practical_1.ipynb): shared **2,000-token BPE**,
-**2,000 bigram types**, one five-fold CV pass and three neural epochs.
+[practical_1.ipynb](../practical_1.ipynb): fold-trained BPE
+vocabulary candidates **1,000 / 2,000 / 3,000**, a fixed **2,000-bigram cap**,
+one five-fold CV pass and three neural epochs.
 It does not read the JSON files in this directory.
 
 These files remain references for earlier experiments and the retained Python modules:
@@ -16,4 +17,4 @@ These files remain references for earlier experiments and the retained Python mo
 | `snli_final.json` | Earlier 5k unigram MLP1, five epochs and its separate test result |
 
 Do not attribute these historical configurations or their test scores to the
-current shared-2k experiment. See the notebook and [current findings](../PROJECT1_FINDINGS.md).
+current fold-trained vocabulary experiment. See the notebook and [current findings](../PROJECT1_FINDINGS.md).
