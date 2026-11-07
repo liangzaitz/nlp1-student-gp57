@@ -568,3 +568,46 @@ that every student has reviewed or can explain the implementation.
 - Update the plan/findings/README/method map/configuration notes. The frozen
   selection JSON remains unchanged and retains its pre-test history. Student
   code/error-note review and oral preparation are still required in Step 11.
+
+## 2026-11-07: fixed-setting experiment, shared 2k BPE and tutorial-style plots
+
+- User direction: replace the active pilot/tuning/logging flow with fixed settings,
+  grouped CV for model selection, full development refit and test. Keep custom
+  implementation and result tables in notebook cells; remove teaching examples.
+- Implement a simple notebook with one configuration, shared BPE, sparse feature
+  construction, fixed-epoch training, nine-system CV, Bayesian/ROPE tables,
+  OOF errors and final evaluation. Retain historical modules/configurations as
+  references; the main notebook does not import or load their results.
+- The user requested global development-fitted BPE, then specified 8k and stopped
+  that run during CV, before any new test evaluation. The user revised the plan
+  to **2,000 BPE tokens and 2,000 bigram types**, then explicitly authorized the
+  complete new run. Interrupted 8k outputs were cleared.
+- Fit shared BPE on all 559,164 eligible training + validation pairs. Explain
+  that it sees CV held-out text without labels, so CV is conditional on the
+  tokenizer. Exclude test-premise overlap; no test text enters learned fitting.
+  Learn bigram inventories and classifier weights on each fold's training rows.
+- Use the 60,002-row whole-group subset, five folds, split/model/sampling seed 0,
+  and 45 fits. Keep three epochs in both CV and final fitting; no early stopping
+  or hyperparameter search. Select highest mean CV accuracy, lower NLL for ties.
+- Repair an incomplete local virtual environment and verify package consistency;
+  refresh its snapshot. The new experiment uses CPU PyTorch and one thread.
+- Fresh CV selects indicators + MLP2 (128 → 64), mean accuracy 62.60%, in 3.09
+  minutes. Refit on all eligible development labels in 51.54 seconds. One new
+  final-model test prediction set gives accuracy 74.48%, NLL 0.6210, macro-F1
+  0.7439 on 9,824 rows. No settings are changed in response to these test scores.
+- Read the tutorial's plotting examples; implement inline Matplotlib equivalents
+  of fold boxplots with points and correlated-t posterior/ROPE curves. Add ROPE
+  sensitivity, test confusions, per-class metrics and online training curves.
+  Export seven PNG/PDF figure sets under `figures/project1_2k/`; no experiment
+  result tables, trial logs or checkpoints are written. Inspect every figure.
+- Compute 18 one-factor posterior comparisons and 54 ROPE-sensitivity rows.
+  Validate the scale and region probabilities against the tutorial's underlying
+  `baycomp` library. Explain that probabilities are conditional pairwise claims.
+- Verify all 62 existing repository checks and one added reference check (63
+  total). Execute all 18 code cells in a fresh kernel with no error/warning/widget
+  outputs. Add a short interpretation of the actual new scores and errors.
+- Update the plan, findings, README, course-method map and historical-configuration
+  notes. Preserve disclosure that previous work already explored tuning and used
+  test; the new result is not an untouched first test or a vocabulary ablation.
+- Student work remains: review/explain code and verify linguistic error readings,
+  understand the shared-tokenizer CV limitation, and prepare the oral assessment.

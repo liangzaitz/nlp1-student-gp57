@@ -1,97 +1,71 @@
-# Project 1 plan: SNLI
+# Project 1: fixed-setting SNLI experiment
 
-Follow [the assignment](project.ipynb) and the four supplied lecture decks, mapped
-in [COURSE_METHODS.md](COURSE_METHODS.md). The main deliverable is
-[practical_1.ipynb](practical_1.ipynb), with all its custom implementation in cells.
-The experimental scope is indicators / unigram counts / **pure bigram counts**,
-combined with logistic / one-hidden-layer MLP / two-hidden-layer MLP.
+The active experiment is entirely in [practical_1.ipynb](practical_1.ipynb).
+There is no hyperparameter search, separate validation-selection stage or result
+logging. Saved notebook outputs contain the result tables and graphs.
 
-## Completed
+The fresh 2k experiment is **complete**: 45 CV fits, automatic indicator-MLP2
+selection, full refit and official test, with seven exported figure sets.
+Mean CV accuracy is **62.60%**; test accuracy is **74.48%**.
+Student code/error review and oral preparation remain.
 
-- [x] **1. Setup:** environment, seeds, pinned dataset revision and assistance/source records.
-- [x] **2. Data:** download, clean, preserve IDs, inspect labels/lengths/overlap.
-- [x] **3. Evaluation:** holdout-disjoint pools, premise-grouped folds, accuracy/NLL/F1,
-  preselected ROPE ±0.005 accuracy and test reservation.
-- [x] **4. Features:** training-only BPE and bigram inventory, separate premise/hypothesis
-  blocks, sparse indicators/counts/pure bigrams; no unigram fallback for bigrams.
-- [x] **5. Models:** logistic, one/two-hidden-layer MLPs, class-prior and hypothesis-only
-  diagnostics, probability scoring and complete raw-text prediction bundles.
-- [x] **6. Baseline schedule:** historical small engineering pilot; freeze three epochs,
-  5k BPE, solver ceiling and a 60,005-row complete-group CV pool.
-- [x] **7. Baseline CV:** five folds × three split seeds × 11 systems = 165 fits.
-  Neural checkpoints use the fixed schedule, never outer held-out selection.
-- [x] **8. Bayesian analysis:** 28 paired correlated-t comparisons, 18 primary one-factor
-  contrasts, ROPE sensitivity and conditional pairwise interpretation.
-- [x] **Short tuning extension:** three joint recipes × nine systems, 27 observations,
-  100,001 training / 9,839 validation rows, one model seed, up to eight epochs,
-  patience three. Nine compatible trials reused, 18 new fits, 7m 58s.
-- [x] **Report review:** simplify the main notebook; independently check saved metrics,
-  Bayesian results and raw-text reloads; distinguish baseline CV from tuning evidence.
+## One experimental flow
 
-These meet the core implemented representation, architecture, CV and Bayesian
-comparison requirements. The nine-system grid, three CV repetitions, diagnostics
-and final test evaluation are design choices beyond the minimum checklist.
+1. Clean the pinned SNLI splits; combine training + validation and exclude exact
+   premises shared with test. This gives **559,164 development pairs**.
+2. Train one **2,000-token BPE** on both sentence roles of that development pool,
+   without labels or test text. Freeze it for CV, final fitting and test encoding.
+3. Select **60,002 rows** as complete premise groups, targeting 60,000 with seed 0.
+   Use one stratified five-fold group split, seed 0, for all nine systems.
+4. Compare indicators, unigram counts and pure bigram counts, each with logistic,
+   one-hidden-layer MLP and two-hidden-layer MLP. Learn bigram inventories and
+   classifier weights from fold-training rows only. Keep all training settings fixed.
+5. Display mean CV accuracy, fold SD, NLL and macro-F1 for every candidate.
+   Select highest mean accuracy, then lower mean NLL for an exact accuracy tie.
+6. Show paired Bayesian correlated-t comparisons and ROPE sensitivity. These
+   describe uncertainty and do not replace the stated model-selection rule.
+7. Inspect one repetition of OOF errors. Refit the selected classifier on all
+   development labels using the same shared BPE and fixed training schedule.
+   Relearn the final bigram inventory from the development pool if needed.
+8. Evaluate the final system on official test; show metrics, per-class scores,
+   confusion matrices, online training curves and a compact error table.
+   Add the tutorial-style fold boxplots with points, posterior/ROPE curves and
+   a ROPE sensitivity heatmap; export plots as PNG and PDF.
+9. Review code, scientific conclusions and errors as a group; prepare the oral.
 
-## Completed: Step 9 — errors and final design
+## Frozen settings
 
-- [x] Review 50 distinct examples/premise groups, covering all six directed anchor
-  confusions, confident shared failures and disagreements with bigram/H-only models.
-  Notes are AI-assisted; student verification remains part of the group review.
-- [x] Use one complete out-of-fold repetition (split seed 0, 60,005 rows), with
-  class confusion matrices, per-class scores, lexical-overlap/negation slices
-  and paired shared-error counts. No repeated-prediction pseudo-replication.
-- [x] Discuss paraphrase, unsupported detail, attribute/action conflicts, predicate
-  roles, commonsense and contextual negation. Flag 11 text/label uncertainties
-  without changing the gold labels. The purposive sample is not a noise estimate.
-- [x] Choose 5k BPE / unigram counts / 128-unit one-hidden-layer MLP, balancing
-  accuracy, NLL and size. The larger vocabulary's same-pool gain is only 0.09 pp,
-  with worse NLL and about 60% more parameters.
-- [x] Document the compact unigram MLP2's active ceiling; do not extend training.
-- [x] Freeze [snli_final.json](configs/snli_final.json): seed 0, five fixed epochs,
-  taken from the chosen recipe's best validation-accuracy checkpoint. Explicitly
-  record transfer of that schedule from 100,001 rows to the larger final pool as
-  an unconfirmed choice. Historical three-epoch CV scores remain unchanged.
-- [x] Save complete notes, OOF metrics, confusions, slices and a source/hash manifest
-  under `results/project1/error_analysis/713ab1f5b3cb5801/split_seed_0/`.
+| Setting | Value |
+| --- | --- |
+| Dataset revision | `cdb5c3d5eed6ead6e5a341c8e56e669bb666725b` |
+| BPE | Vocabulary 2,000; minimum frequency 2; `[UNK]`; Metaspace; preserved case/punctuation |
+| Bigram features | Training-only inventory; frequency ≥2; maximum 2,000 types; no unigram fallback |
+| Pair features | Separate premise/hypothesis blocks; raw counts or binary presence; sparse float32 |
+| Logistic | L2, SAGA, C=1, at most 1,000 iterations, tolerance 0.0001 |
+| MLP hidden units | `[128]` or `[128, 64]` |
+| Activation/dropout | ReLU / 0.1 |
+| Optimizer | AdamW, learning rate 0.001, weight decay 0.0001 |
+| Batch / epochs | 128 / **3 in CV and final fitting**, no early stopping |
+| Sampling / split / model seeds | 0 / 0 / 0 |
+| Compute | CPU, one PyTorch thread; 45 CV fits |
+| Primary / supporting metrics | Accuracy / natural-log NLL and macro-F1 |
+| ROPE | ±0.005 accuracy; sensitivity ±0.0025 and ±0.01 |
 
-A new tuned-CV claim would need its own affordable selection/evaluation design,
-with selection inside outer training folds. It is an optional extension, not a
-reason to block error analysis or repeat the large stopped search. The current
-short search gives validation-selection evidence, not nested-CV results.
+The single five-fold repetition keeps the fresh experiment affordable relative to
+our earlier approximately 15-minute target. Fewer paired scores mean greater
+Bayesian uncertainty than in the former three-repetition design.
 
-## Completed: Step 10 — final refit and test
+## Interpretation boundary
 
-- [x] Fit fresh train+validation BPE and the frozen MLP on all **559,164** eligible
-  rows. Exclude test premises, retain train/validation overlaps and use five epochs.
-- [x] Finish preparation, fitting and save/reload checks in **2.98 minutes**,
-  within the fixed 900-second allowance. No test-based stopping or model changes.
-- [x] Save the complete pipeline, exact training IDs, history, package/source hashes
-  and a source-notebook snapshot in `results/project1/final/snli_5k_unigram_mlp1/`.
-- [x] Generate one final-model probability set on all **9,824** cleaned test rows:
-  accuracy **74.58%**, macro-F1 **0.7451**, NLL **0.6886**.
-  Preserve class reports, confusions and predictions. Run All reuses these artifacts.
-- [x] Export learning curves, test confusion matrices, per-class metrics and
-  confidence/reliability plots. Fixed-bin confidence analysis is diagnostic only.
-- [x] Test full-pool eligibility, successful reload/reuse, budget failure and the
-  one-pass guard; leave the original frozen selection configuration unchanged.
+The shared BPE has seen held-out CV text, without its labels. These scores are
+conditional on the shared tokenizer; they are not CV estimates of a pipeline
+whose preprocessing was entirely fitted inside each fold. Test text never
+enters learned preprocessing. Test-premise membership is used only to exclude
+overlapping development groups.
 
-Official test was scored only after the final recipe/schedule were frozen.
-No model, threshold or calibration was fitted to its results.
-
-## Next: Step 11 — package and prepare
-
-- [ ] Review all code/explanations as a group and resolve remaining student questions.
-- [x] Repeat fresh-kernel Run All after final changes; keep sources, dependency versions,
-  configurations, results and assistance disclosure reproducible.
-- [ ] Prepare the repository URL and up to six optional oral backup slides covering
-  the assignment questions. Retain clear notes for the later blog.
-
-**Compute constraint:** approximately 15 minutes per new training invocation;
-training flags default to false. No large sweep, seed confirmation, full-data
-search or follow-up worker is queued. The historical baseline took 21.62 minutes;
-reproducing its entire CV grid needs separate planning under this constraint.
-
-Use [PROJECT1_FINDINGS.md](PROJECT1_FINDINGS.md) for current evidence and limitations.
-The detailed historical implementation remains in
-[practical_1_details.ipynb](practical_1_details.ipynb); previous long-form notes are
-preserved locally under `results/project1/review/before_streamlining/`.
+Earlier work already evaluated a different model on test and explored tuning.
+Those are historical facts, not stages of the current flow. This new experiment
+must not be described as a never-before-seen first test or an isolated estimate of
+the effect of vocabulary size. Historical configurations/results remain available
+for reference but are not loaded by the active notebook. See
+[findings](PROJECT1_FINDINGS.md) and [assistance](AI_ASSISTANCE.md).

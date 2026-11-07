@@ -1,113 +1,84 @@
 # Project 1: SNLI
 
-Start with [practical_1.ipynb](practical_1.ipynb). It follows the supplied
-[course practical](https://github.com/S-Chaudhuri/uva_nlp1_2025/blob/main/NLP1_2025_Practical_2_%28student%29.ipynb):
-short explanations, worked inputs, explicit model/training code, plots and interpretation.
-All custom code used by this notebook is written in its cells. It does not import
-local project modules, execute Python files, or load another notebook's definitions.
-Installed packages, JSON configurations, downloaded data and saved experiments
-remain dependencies; the notebook is not a standalone data/result distribution.
+Open [practical_1.ipynb](practical_1.ipynb). All custom code is written in its
+cells; it does not import project helper modules or read external experiment
+configurations/results. The notebook has one fixed-setting experiment:
 
-## Open and run
+**Training + validation → shared 2k BPE → grouped CV → best model → full refit → test.**
 
-From the repository root, use the existing environment:
+The nine candidates combine indicators, unigram counts or pure bigram counts
+with logistic regression or a one-/two-hidden-layer MLP. Settings are in one
+`BASE` dictionary. There is no hyperparameter search or early stopping. Final
+neural training uses the same three epochs as CV.
+
+## Run
+
+Select `.venv/bin/python` as the notebook kernel, or launch Jupyter:
 
 ```bash
 source .venv/bin/activate
 jupyter lab part1/practical_1.ipynb
 ```
 
-In VS Code select `.venv/bin/python` as the notebook kernel, then **Run All**.
-The notebook finds the repository from either its root or `part1`.
-It reads the completed experiments, verifies their results, and runs 30 teaching
-updates on 16 training examples. **It starts no new training or test-inference pass.** Final test probabilities
-are already saved; Run All checks them and regenerates their graphs. Cached Arrow files contain the downloaded SNLI data;
-offline loading and cache lock files are normal. Widget progress bars are disabled.
+**Run All performs fresh fitting**, including 45 CV fits and the selected final
+model. It saves results in notebook outputs only, with tables and graphs inline.
+Save the notebook after execution. No trial logs, checkpoints or result tables are written to files.
+Plots are also exported as PNG and PDF to `figures/project1_2k/`. Existing cleaned SNLI data are reused; a fresh checkout downloads the
+pinned revision through Hugging Face. Data remain excluded from Git.
 
-The current checkout contains the ignored data/results. A new checkout needs the
-data and completed artifact directories to reproduce these displays. The detailed
-notebook and earlier CLI modules preserve the original experiment-generation
-workflow; commands for that workflow are in the locally preserved previous README
-under `results/project1/review/before_streamlining/`. Generating all baseline
-artifacts is separate from the default read-and-check Run All.
+For a new environment, use Python 3.12 and install the root `requirements.txt`
+(or the recorded `environment.txt` snapshot with the CPU PyTorch index described
+there). The repaired current environment uses the `.venv` interpreter.
 
-The verified environment is Python 3.12.3 on Linux with CPU PyTorch; the course
-README specifies Python 3.14. To recreate our recorded environment on a compatible
-machine, create a Python 3.12 virtual environment and install the snapshot:
+## Read the results
 
-```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install --extra-index-url https://download.pytorch.org/whl/cpu -r part1/environment.txt
-python -m pip check
-```
-
-## Reading order and current status
-
-| Notebook section | Content |
+| Section | Content |
 | --- | --- |
-| 1–3 | Setup, data, leakage-aware pools and grouped folds |
-| 4 | BPE, indicators, unigram counts and pure bigram counts |
-| 5 | Models, one training loop, gradient example, bundles and logits → probabilities → decision |
-| 6 | Short joint tokenizer/model search and checked validation results |
-| 7–8 | Checked baseline CV scores and Bayesian/ROPE comparisons |
-| 9 | One-repetition OOF error review, 50 annotated cases and frozen final recipe |
-| 10 | Completed final fit/test, learning curves and test graphs |
-| 11 | Group review and oral preparation |
+| 1 | One frozen configuration |
+| 2 | Source splits, eligible development pool and grouped CV subset |
+| 3–4 | Shared BPE, sparse representations, models and fixed training loop |
+| 5 | All nine CV results, comparison graph and automatic winner selection |
+| 6 | Paired Bayesian comparisons and visible ROPE sensitivity table |
+| 7 | Selected model's out-of-fold errors |
+| 8 | Full-pool refit, official-test table, per-class scores and graphs |
+| 9 | Tutorial-style fold boxplots/points, Bayesian posterior curves and ROPE heatmap |
 
-The baseline has **165 completed fits** (135 primary, 30 diagnostic/baseline).
-The short search has **27 completed observations**, nine reused and 18 newly
-fitted, taking **7m 58s** for that invocation. CV and validation use different
-training sizes and evaluation sets; their accuracies are not a direct before/after
-comparison. Step 9 now adds 50 AI-assisted error notes, class confusions, text
-slices and shared-error counts. The final 5k unigram MLP1 recipe is frozen at five
-epochs in [snli_final.json](configs/snli_final.json). The final fit completed in
-2.98 minutes and achieved **74.58% test accuracy**, macro-F1
-**0.7451**, NLL **0.6886** on 9,824 cleaned test rows. See [findings](PROJECT1_FINDINGS.md) and the
-[remaining checklist](PROJECT1_PLAN.md).
+BPE is trained once on **559,164 eligible training + validation pairs**, excluding
+test-premise overlaps. CV uses **60,002 rows**, one five-fold split and model seed
+0. Because BPE sees CV held-out text without labels, these scores are conditional
+on the shared tokenizer. Bigram inventories and model weights use fold-training
+rows only. The official test is excluded from learned preprocessing.
 
-## Optional new experiments
+Earlier work already evaluated another model on test. The notebook states that
+history explicitly; it does not substitute historical test scores for this fit.
+Historical Python modules, JSON configurations and `practical_1_details.ipynb`
+remain reference material and are not dependencies of the current experiment.
 
-Keep `RUN_SEARCH = False`, `RUN_CV = False` and `RUN_FINAL = False` for the normal report. To run a new
-experiment, save the notebook and enable only its corresponding switch.
-New outputs use `results/project1/streamlined/`, preserving historical artifacts.
+## Completed fresh results
 
-`run_search` tests the three saved joint recipes on the 100,001-row training
-sample and all 9,839 eligible validation rows. It fits training-only preprocessing,
-uses one seed, at most eight neural epochs and patience three, restoring the best
-accuracy checkpoint with NLL as a tie-break. Its simple resume checks its own
-completed trials. It does not import historical trials or run the extended policy.
-An explicit resume gets another allowance; none is scheduled automatically.
+The selected **indicator MLP2** achieved **62.60% mean CV accuracy** and
+**74.48% test accuracy**, with test NLL **0.6210** and macro-F1 **0.7439**.
+CV took **3.09 minutes**; full preparation/refitting took **51.54 seconds**.
+The notebook contains all nine candidates and their uncertainty analysis.
 
-Both runners cap each invocation at 900 seconds, including preprocessing. Python
-signal delivery can lag in native library calls. The completed baseline originally
-took 21.62 minutes, so a fresh capped CV invocation may be incomplete. Only complete
-paired scores support the reported comparisons; the simplified CV runner requires
-a new directory rather than resuming partial grids. Historical robust CV resumption,
-trial-import checks, pilot and optional extensive search live in
-[practical_1_details.ipynb](practical_1_details.ipynb), which the main notebook never
-imports. Its outputs are cleared and training switches are false.
+Seven figure sets are displayed inline and exported in
+[figures/project1_2k/](figures/project1_2k/) as PNG and PDF. In particular:
 
-The completed final experiment is separate in `results/project1/final/snli_5k_unigram_mlp1/`.
-Its source/configuration snapshot, exact training rows, complete model and test
-probabilities are retained. Even an explicit `RUN_FINAL` invocation reuses a
-completed matching run; changed/corrupt artifacts are rejected. Four PNG graph
-sets live in its `figures/` directory and appear in notebook section 10.
+- [Fold boxplots with individual scores](figures/project1_2k/cv_boxplots_and_points.png)
+- [Bayesian posteriors and ROPE](figures/project1_2k/bayesian_posteriors_rope.png)
+- [ROPE sensitivity](figures/project1_2k/rope_sensitivity.png)
+- [Test confusion matrices](figures/project1_2k/test_confusion.png)
+- [Training curves](figures/project1_2k/training_curves.png)
 
-## Verification and supporting records
+## Verification and sources
 
 ```bash
 .venv/bin/python -m unittest discover -s part1/tests -v
 ```
 
-The streamlined notebook was executed in a fresh kernel with project-helper
-imports blocked. Its checks recompute metrics from all 165 CV prediction sets
-and all 27 validation trials, replay 11 saved systems from raw text, and recompute
-28 Bayesian contrasts plus 84 ROPE-sensitivity rows. Synthetic tests cover feature
-boundaries, both training modes, bundle reloads, search resume, a complete small CV
-and the timer, plus error-analysis alignment/slicing/sampling. Software-test scores are not SNLI experiment results.
-
-- [Project requirements](project.ipynb) and [tutorial](tutorial.ipynb).
-- [Course-method map](COURSE_METHODS.md), including lecture page references.
-- [Configurations](configs/README.md) and [environment snapshot](environment.txt).
-- [AI-assistance record](AI_ASSISTANCE.md); students still need to review and explain the work.
+The notebook tests cover literal inline definitions, test exclusion, complete
+premise groups, feature values/boundaries, fixed epochs, shared-tokenizer CV,
+selection and Bayesian direction. Other tests cover the retained historical modules.
+See [requirements](project.ipynb), [plan](PROJECT1_PLAN.md),
+[findings](PROJECT1_FINDINGS.md), [course methods](COURSE_METHODS.md) and
+[AI assistance](AI_ASSISTANCE.md).

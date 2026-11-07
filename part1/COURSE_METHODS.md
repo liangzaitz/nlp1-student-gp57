@@ -32,7 +32,9 @@ study material, not a request to carry out their administrative action items.
 ## Decisions for this implementation
 
 1. Keep SNLI as three-way classification with input `x = (P, H)`.
-2. Keep the T1 BPE tokenizer as the common segmentation procedure.
+2. Use one shared 2,000-token BPE trained on eligible training + validation
+   text, as requested by the group. CV scores are conditional on that tokenizer,
+   which sees CV held-out text without labels; no test text enters its fitting.
 3. Compare binary unigram indicators, raw unigram counts, and bigram-only
    counts. The third choice follows CLASS pages 24 and 49-50 and T1's
    bag-of-bigrams discussion. On 2026-11-06 the group requested pure bigram
@@ -54,7 +56,7 @@ identifies what must demonstrate completion; it does not assert existing results
 
 | Method/concept | Source | Planned use and evidence |
 | --- | --- | --- |
-| Model versus decision rule | CLASS 8-9, 55; T1 Text Classification | Save a three-class pmf and the separate argmax decision; show one worked example |
+| Model versus decision rule | CLASS 8-9, 55; T1 Text Classification | Compute a three-class pmf and the separate argmax decision in the visible code |
 | Fixed feature map `h(x)` in `R^D` | CLASS 18-24; T1 Text Representation | Define feature coordinates, role blocks, dimension, and information loss |
 | Binary token indicators | CLASS 20-21; T1 TokenIndicator; P1 | First representation; manually check presence values |
 | Unigram counts / bag-of-words | CLASS 22-23; T1 Bag-of-Words exercise; P1 | Second representation; manually check repeated-token counts |
@@ -67,7 +69,7 @@ identifies what must demonstrate completion; it does not assert existing results
 | Mini-batches, autodiff, gradient updates | CLASS 41-43; T1 smlp.py | Explain forward pass, backward pass, and optimizer step in the training loop |
 | Weight decay and dropout | CLASS 44; T1 smlp.py | Record regularization settings; enable dropout for training and disable it for evaluation |
 | Probability-level versus decision-level evaluation | CLASS 46, 51-55 | Report NLL as well as accuracy/macro-F1; show why one can change without the other |
-| Random seeds, CV, multiple runs, variability | CLASS 47; T1 Experiment; P1 | Save paired fold assignments and seeds; plot variation and explain its sources |
+| Random seeds, CV, multiple runs, variability | CLASS 47; T1 Experiment; P1 | Use paired fold assignments and fixed seeds; plot all five fold scores |
 | Bayesian comparison and ROPE | T1 Data analysis model; P1 | Compare paired fold accuracies, report posterior uncertainty and practical-equivalence probabilities |
 | Representation/argmax/label limitations | CLASS 49-54; LANG 20-35 | Analyze errors and ambiguous examples; explain collisions and uncertainty |
 
@@ -104,7 +106,7 @@ The input is a premise/hypothesis pair `x = (P, H)`, and `K = 3`.
   probabilities assigned to gold labels. Macro-F1 gives each class equal weight.
 
 Replacing unigrams with bigrams changes feature identities, sparsity and local
-order sensitivity. With `V=B=5000`, all three inputs have 10,000 coordinates
+order sensitivity. With `V=B=2000`, all three inputs have up to 4,000 coordinates
 and matched parameter counts at each architecture. Equal width does not make
 their information equivalent: one-token sentences and sentences with no retained
 adjacencies produce zero bigram blocks. Individual token counts are omitted;
@@ -169,66 +171,39 @@ encoders can be revisited for Project 2; LLM methods belong to the later tutoria
 sequence described in INTRO page 8. A linguistic generative grammar (LANG 21) is
 also a different concept from a probabilistic text generator.
 
-## Experimental choices we added for SNLI
+## Current implementation and review
 
-The following support fair, feasible experiments, but are not extra lecture
-methods that every student must implement:
+The active experiment is entirely in [practical_1.ipynb](practical_1.ipynb).
+A single fixed-setting flow replaces the historical pilot, search and artifact
+machinery. The lecture references above remain the basis for the methods.
 
-- Premise-grouped folds, because examples can share premises.
-- Concatenated premise/hypothesis feature blocks, because the input is a pair.
-- CSR storage and sparse first-layer multiplication, following the tutorial's
-  sparse direction and avoiding large dense intermediate matrices.
-- All nine feature/architecture combinations, five folds, and three repetitions.
-- A majority/class-prior baseline and a hypothesis-only diagnostic.
-- A pilot-based budget, a documented fixed subset if needed, checkpoints,
-  stable example IDs, saved predictions, and a final untouched test evaluation.
-
-We will justify these choices in the notebook. For instance, five-fold CV and
-Bayesian comparison are course methods, while grouping those folds by SNLI
-premise is our task-specific adaptation.
-
-## Implementation and understanding tracker
-
-All four supplied lecture decks have been reviewed. Baseline Steps 1–8 and the
-short validation search, Step 9 error review/final design and Step 10 final fit/test
-are complete. New tuned CV remains optional; group review/oral preparation are next.
-The main notebook was simplified on 2026-11-06 while retaining these methods.
-The historical pilot, extensive search and detailed resume machinery are in
-[practical_1_details.ipynb](practical_1_details.ipynb); the main notebook never loads it.
-
-| Component | Current status and evidence |
+| Component | Current notebook evidence |
 | --- | --- |
-| Environment, seeds, data provenance | Notebook sections 1–3; pinned SNLI revision, saved source IDs, [environment](environment.txt), [setup](README.md) |
-| Task, labels and data examples | Section 2; counts, labelled pairs, training-only label/length plots; [data tests](tests/test_snli_data.py) |
-| BPE and train-only preprocessing | Section 4; separate vocabulary/inventory per fold, actual BPE examples, saved mappings |
-| Indicators, unigram and pure bigram counts | Section 4; explicit sparse role blocks, repeated-token values, controlled order permutation; [feature tests](tests/test_practical_1_notebook.py) |
-| Model → pmf → decision | Section 5; visible logits/softmax/argmax calculation on an illustrative unlabelled pair |
-| Log-linear and one/two-hidden-layer MLPs | Section 5; literal classes/training function, sparse first multiplication, ReLU/dropout and raw-text bundle reload |
-| MLE/NLL, gradients, regularization | Section 5; explicit minibatch/autodiff/AdamW loop and 30-update teaching curve; section 6 shows validation NLL overfitting |
-| NLL versus accuracy/F1 | Sections 5–7; independent probability-based metric recomputation; accuracy-selected checkpoints need not minimize NLL |
-| Historical fixed-epoch baseline | Frozen [configuration](configs/snli_project1_frozen_bigram.json); three epochs before reported CV; outer scores never select checkpoints |
-| Repeated grouped CV | Sections 3/7; 60,005 rows, five folds × three split seeds, 165 fits; complete-group boundaries and paired row IDs checked |
-| Bayesian comparison and ROPE | Section 8; direct corrected-t computation, 28 contrasts, 95% intervals, 84 sensitivity rows, preselected ±0.005 accuracy ROPE |
-| Joint tokenizer/model tuning | Section 6; 27 completed observations, nine reused/18 new, 7m 58s; 100,001 train/9,839 validation, one seed, three joint recipes; [policy](configs/snli_tuning.json) |
-| Code in notebook cells | 42 code cells / 1,297 code lines; fresh-kernel Run All with project imports blocked; no dynamic helper-file execution; [literal-definition tests](tests/test_practical_1_notebook.py) |
-| Practical-style presentation | Short explanations, worked token/feature/model inputs, explicit gradient updates, comparative plots and qualified interpretations |
-| Error analysis and final design | Completed first pass: section 9, 60,005 unique OOF rows, class confusions, overlap/negation slices, shared errors and 50 distinct annotated cases; 11 text/label flags retained, student review still required; [frozen final recipe](configs/snli_final.json), five epochs chosen on validation |
-| Final test | Completed Step 10: 559,164 refit rows, five epochs, 2.98 minutes; 9,824 test pairs, accuracy 74.58%; one frozen-model prediction pass, saved probabilities/bundle, four graph sets |
-| Oral preparation | Pending Step 11; group review and optional backup slides still required |
-| HC2b concepts | Reviewed; connections only, no sequence model added to P1 |
+| Data and evaluation | Section 2: 559,164 eligible train+validation pairs; 60,002-row whole-group CV subset; five grouped folds, seed 0 |
+| BPE and features | Section 3: one shared 2k BPE; fold-training bigram inventories capped at 2k; role-separated sparse inputs |
+| Logistic and neural classifiers | Section 4: softmax/log-softmax, sparse first layer, ReLU, dropout, explicit minibatches/autodiff/AdamW |
+| Fixed schedule | Three neural epochs in CV and final refit; no checkpoint selection or hyperparameter search |
+| Metrics and selection | Section 5: all nine candidates; highest mean accuracy, lower NLL for exact ties; macro-F1 and descriptive fold SD |
+| Bayesian analysis | Section 6: five paired scores, correlated-t model, 18 one-factor comparisons and ROPE sensitivity |
+| Error review | Section 7: one OOF repetition; section 8: test confusions and representative errors; students must interpret these |
+| Final evaluation | Section 8: refit selected classifier on full development pool, fixed shared BPE, official-test metrics and graphs |
+| Tutorial-style plots | Section 9: boxplots with fold points, posterior mean-difference curves and ROPE sensitivity heatmap; PNG/PDF exports |
+| Literal code | All implementation in notebook cells; no local helper imports, external configuration/result reads or dynamic code loading |
 
-Verification: 69 repository tests passed; main Run All independently reproduced
-all saved CV/validation metrics and Bayesian/ROPE tables. The new fixed-training
-loop matches the earlier implementation on synthetic cases. These are software
-checks, not evidence that students have reviewed or can explain every method.
-See [current findings](PROJECT1_FINDINGS.md) for exact scores, scope and limitations.
+Premise grouping, sentence-role concatenation, the fixed CV subset, feature caps
+and the globally fitted tokenizer are task-specific design choices. The shared
+BPE means this CV evaluates classifiers conditional on development-fitted
+preprocessing. Five dependent folds provide limited posterior information.
+Earlier experiments already used test; the current report discloses that history.
+The current result must not be presented as a controlled vocabulary-size ablation.
 
-## Course organization to keep in mind
+The notebook tests check leakage boundaries, feature counts/roles, complete groups,
+fixed epochs, unchanged BPE during CV, automatic selection and posterior direction.
+Students still need to verify error interpretations and explain the code.
 
-INTRO pages 7-11 explain the three-project sequence, a 15-minute oral assessment,
-the same task/dataset across projects, and the later 1,500-word blog. P1's
-specific checklist allows up to six backup slides rather than a presentation;
-the overview mentions a handful of slides and the project-repository URL. We
-will prepare the compact backup deck and URL while following the specific P1
-requirements. Keep deadline/slot verification separate from this implementation
-plan and use the official course schedule for current details.
+## Course organization
+
+INTRO pages 7–11 describe the three-project sequence, the 15-minute oral,
+the same task/dataset across projects and the later 1,500-word blog. P1 allows
+up to six optional backup slides. Group review and oral preparation remain;
+check deadlines and slots against the official course schedule separately.
