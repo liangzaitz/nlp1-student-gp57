@@ -1,0 +1,83 @@
+{
+  "version": "budgeted_joint_search_v1",
+  "mode": "budgeted",
+  "output_dir": "part1/results/project1/tuning",
+  "time_budget_seconds": 900,
+  "minimum_start_seconds": 30,
+  "sampling_seed": 57,
+  "model_seeds": [
+    0
+  ],
+  "screening_target_rows": 100000,
+  "initial_max_epochs": 8,
+  "absolute_max_epochs": 8,
+  "patience": 3,
+  "logistic_max_iter": 1000,
+  "reuse_run_dir": "part1/results/project1/tuning/d79628ac9dfb0954",
+  "scope": "limited joint validation search; no full-data confirmation, refinement stage or seed repeats",
+  "candidates": [
+    {
+      "name": "baseline"
+    },
+    {
+      "name": "compact_regularized",
+      "tokenizer": {
+        "vocab_size": 3000,
+        "min_frequency": 2,
+        "normalization": "lowercase"
+      },
+      "bigram_features": {
+        "max_features": 10000,
+        "min_frequency": 2
+      },
+      "logistic_training": {
+        "C": 0.1
+      },
+      "neural_training": {
+        "learning_rate": 0.001,
+        "dropout": 0.3,
+        "weight_decay": 0.001,
+        "batch_size": 256,
+        "hidden_dims": {
+          "mlp_one_hidden": [
+            64
+          ],
+          "mlp_two_hidden": [
+            128,
+            64
+          ]
+        }
+      }
+    },
+    {
+      "name": "larger_faster_learning",
+      "tokenizer": {
+        "vocab_size": 8000,
+        "min_frequency": 5,
+        "normalization": "none"
+      },
+      "bigram_features": {
+        "max_features": 10000,
+        "min_frequency": 5
+      },
+      "logistic_training": {
+        "C": 0.01
+      },
+      "neural_training": {
+        "learning_rate": 0.003,
+        "dropout": 0.1,
+        "weight_decay": 0.0001,
+        "batch_size": 256,
+        "hidden_dims": {
+          "mlp_one_hidden": [
+            128
+          ],
+          "mlp_two_hidden": [
+            128,
+            64
+          ]
+        }
+      }
+    }
+  ]
+}

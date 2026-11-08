@@ -21,7 +21,7 @@ from . import clslib
 
 def download_ag_news_texts():
     """
-    Returns the texts in the AG news collection (but not the labels).
+    Returns the texts in the AG news collection (but not the labels.
     """
     #Loading our training corpus
     dataset = load_dataset("fancyzhx/ag_news") 
