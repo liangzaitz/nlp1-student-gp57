@@ -159,6 +159,76 @@ class Project2NotebookTests(unittest.TestCase):
                                                epochs=6, select_epoch=True)
         self.assertEqual(epoch, 5)
 
+    def test_cv_and_dev_search_use_pilot_epoch_budget(self):
+        notebook = nbformat.read(NOTEBOOK, as_version=4)
+        calls = [node for cell in notebook.cells if cell.cell_type == 'code'
+                 for node in ast.walk(ast.parse(cell.source))
+                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                 and node.func.id == 'fit_model']
+        tuning = next(call for call in calls if any(
+            keyword.arg == 'select_epoch' and isinstance(keyword.value, ast.Constant)
+            and keyword.value.value is True for keyword in call.keywords))
+        self.assertEqual(ast.unparse(tuning.args[3]), 'TRAIN_EPOCHS')
+        self.assertEqual(sum(len(call.args) > 3 and isinstance(call.args[3], ast.Name)
+                             and call.args[3].id == 'TRAIN_EPOCHS' for call in calls), 2)
+
+    def test_reduced_budget_retains_all_eight_designs(self):
+        notebook = nbformat.read(NOTEBOOK, as_version=4)
+        source = next(c.source for c in notebook.cells
+                      if c.cell_type == 'code' and c.source.startswith('CANDIDATES = {}'))
+        scope = dict(self.env)
+        # Only construct design dictionaries; do not run the pilot.
+        exec(source.split('MODEL_NAMES =', 1)[0], scope)
+        designs, base = scope['CANDIDATES'], scope['BASE']
+        self.assertEqual(base['training_rows'], 60000)
+        self.assertEqual(base['cv_seeds'], [0, 3])
+        self.assertEqual(base['min_epochs'], 5)
+        self.assertEqual(base['max_epochs'], 10)
+        self.assertEqual(len(designs), 8)
+        self.assertEqual(sum(c['encoder'] == 'pool' for c in designs.values()), 6)
+        self.assertEqual(len(designs)*base['n_splits']*len(base['cv_seeds']), 80)
+        cv_source = next(c.source for c in notebook.cells if c.cell_type == 'code'
+                         and c.source.startswith('cv_rows, oof_rows'))
+        fit_seed = next(n for n in ast.walk(ast.parse(cv_source))
+                        if isinstance(n, ast.Assign) and any(
+                            isinstance(t, ast.Name) and t.id == 'fit_seed' for t in n.targets))
+        seeds = []
+        for seed in base['cv_seeds']:
+            scope['seed'] = seed
+            exec(compile(ast.Module(body=[fit_seed], type_ignores=[]), 'cv_seed', 'exec'), scope)
+            seeds.append(scope['fit_seed'])
+        self.assertEqual(seeds, [0, 3])
+
+    def test_reduced_search_changes_one_parameter_per_trial(self):
+        notebook = nbformat.read(NOTEBOOK, as_version=4)
+        source = next(c.source for c in notebook.cells
+                      if c.cell_type == 'code' and c.source.startswith('tuning_rows, tuned'))
+        family_loop = next(n for n in ast.parse(source).body if isinstance(n, ast.For))
+        option_nodes = []
+        for node in family_loop.body:
+            if isinstance(node, ast.Assign) and any(
+                    isinstance(t, ast.Name) and t.id == 'pairs' for t in node.targets):
+                break
+            option_nodes.append(node)
+        counts = []
+        for family, expected in [('pool', 6), ('lstm', 8)]:
+            base = {'encoder': family, 'head': 'mlp2', 'dim': 300,
+                    'hidden': 300, 'dropout': .1, 'learning_rate': .001}
+            scope = dict(self.env, family=family, CANDIDATES={'chosen': base},
+                         selected={family: 'chosen'})
+            exec(compile(ast.Module(body=option_nodes, type_ignores=[]), 'search', 'exec'), scope)
+            options = scope['options']
+            self.assertEqual(len(options), expected)
+            self.assertEqual(options['incumbent'], base)
+            counts.append(len(options))
+            for name, config in options.items():
+                if name != 'incumbent':
+                    self.assertEqual(sum(config[k] != base[k] for k in base), 1)
+            for parameter, values in scope['search'].items():
+                self.assertTrue(set(values) <= {c[parameter] for c in options.values()})
+        self.assertEqual(sum(counts), 14)
+        self.assertEqual(2 + 80 + sum(counts) + 2, 98)
+
     def test_chunked_neighbours_match_dense_search(self):
         rng = np.random.default_rng(1)
         queries, references = rng.normal(size=(7,4)), rng.normal(size=(11,4))

@@ -9,6 +9,32 @@ The week after the deadline, your TA will perform a short oral assessment of the
 
 # Get to work!
 
+
+## Agreed compute budget
+
+- Use one fixed **60,000-pair target**, retaining complete premise groups, for
+  every model. All candidates use the same rows within a CV fold; tuning and
+  final refits use the full fixed sample. Official dev/test stay separate.
+- Run **two five-fold grouped CV repetitions with seeds 0 and 3**. Match model
+  initialization and shuffle seeds to each CV seed; keep sampling, pilot,
+  dev tuning and final refits at seed 0. Compare six pooled designs and two
+  LSTM dimensions: **80 fits**.
+- Choose the best pooled and best recurrent design. Tune on official dev by
+  varying **one parameter at a time** around each selected incumbent. Keep the
+  listed value ranges and the .001 learning-rate incumbent; skip duplicates:
+  **6 pooled + 8 LSTM = 14 tuning trials**.
+- Use two training-only pilots with a **10-epoch ceiling** to choose a shared
+  **5–10 epoch** budget for CV and dev search. Final refits use their selected
+  dev checkpoint epochs. Total: **2 + 80 + 14 + 2 = 98 planned fits**.
+- Two CV repetitions provide a limited seed-sensitivity check; they do not
+  establish broad robustness. The smaller search omits hyperparameter
+  interactions. Paired fold comparisons and ROPE remain exploratory.
+
+This replaces the earlier one-third sample and full-grid search plan, and
+uses two CV seeds. The six pooled comparisons, frozen embeddings, batch size 64, test
+reports, error analysis, BDA and pickle saves remain part of the experiment.
+
+
 >IMPORTANT NOTES from Nina:
 Please save all loaded results in pkl files of the RESULTS folder to reload them so we can do post-processing on the data. 
 Please make sure to use the same sized training dataset in all experiment. This could be the full dataset (550,000 text pairs), or maybe 1/3 of it, to save on compute. I don't mind. I would fine-tune on devset (not fold-devsets) still when the best design config. has been found, since this will be much less costly.
@@ -82,7 +108,7 @@ Use dev-set this time to fix final parameters of models?
     * How did you structure you hyperparameter search?
 
     Objective: choose 2 best models for hyperparameter tuning.
-    Strategy: cross-validation on X (= product of the number of possible values per hyperparameter) different model configurations.
+    Strategy: compare eight baseline designs in two five-fold CV runs, then vary one hyperparameter at a time on official dev for the selected pooled and recurrent designs (see the agreed compute budget above).
     Base-line config: check specs from \part2.clslib.LSTMEncoder(); this is based on the torch LSTM model (https://docs.pytorch.org/docs/2.15/generated/torch.nn.LSTM.html). Keep everything else default (see tutorial, use batch size 64 and fewer epochs), choose 2 hidden layers to avoid overfitting.
 
     | LSTM modelconfig. | values | range | 
@@ -90,13 +116,13 @@ Use dev-set this time to fix final parameters of models?
     | Masking/dropout rate | 3 | 0.1-0.2 |
     | Learning rate? | 3 | 0.1-0.3 |
     | Hidden Units (Neurons per Layer) | 3 | 100-500 [200-500 more common for complex tasks like NLP] |
-    | Epochs | range: 5-20 | determine from pilot|
+    | Epochs | range: 5-10 | determine from training-only pilot|
 
-    Hyperparameter tuning on the devset (=validation; for each fold) for the best model.
+    Tune the selected pooled and recurrent designs on the official devset after CV selection, without a separate hyperparameter search for each fold.
 
     * Are you keeping an eye on experimental variance?
 
-    We implement this by only varying a few model configuration specs., and run cross-validation over several seeds.
+    For this compute budget, use two five-fold grouped CV runs with seeds 0 and 3. Report paired seed/fold variation and ROPE, while acknowledging that two repetitions provide only a limited robustness check. The smaller dev search varies one parameter at a time and does not test interactions.
 
 6. Experiment with error analysis and try to discover what characteristics of input texts are predictive of performance differences across major design choices.
     * What analysis features did you come up with?
